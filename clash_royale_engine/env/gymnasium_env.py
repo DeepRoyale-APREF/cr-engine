@@ -32,6 +32,12 @@ from clash_royale_engine.utils.constants import (
     PRINCESS_TOWER_STATS,
 )
 from clash_royale_engine.utils.validators import InvalidActionError
+from clash_royale_engine.core.recorder import (
+    EpisodeExtractor,
+    GameRecord,
+    Transition,
+    apply_fog_of_war,
+)
 
 
 class ObservationType(Enum):
@@ -71,12 +77,16 @@ class ClashRoyaleEnv(gym.Env):
         speed_multiplier: float = 1.0,
         render_mode: Optional[str] = None,
         seed: int = 0,
+        fog_of_war: bool = True,
+        record: bool = False,
     ) -> None:
         super().__init__()
 
         self.obs_type = obs_type
         self.reward_shaping = reward_shaping
         self.render_mode = render_mode
+        self.fog_of_war = fog_of_war
+        self._record = record
 
         deck = deck or list(DEFAULT_DECK)
         opponent_deck = opponent_deck or list(DEFAULT_DECK)
@@ -92,6 +102,10 @@ class ClashRoyaleEnv(gym.Env):
             speed_multiplier=speed_multiplier,
             seed=seed,
         )
+
+        # Enable recording if requested
+        if self._record:
+            self.engine.enable_recording()
 
         self._setup_spaces()
 
@@ -198,9 +212,11 @@ class ClashRoyaleEnv(gym.Env):
         tile_x = remaining // N_HEIGHT_TILES
         return (tile_x, tile_y, card_idx)
 
-    # ── observation encoding ──────────────────────────────────────────────
+    # ── observation encoding (with fog-of-war) ───────────────────────────────
 
     def _encode(self, state: State) -> np.ndarray:
+        if self.fog_of_war:
+            state = apply_fog_of_war(state)
         if self.obs_type == ObservationType.FEATURE_VECTOR:
             return self._to_feature_vector(state)
         # Default fallback
@@ -297,3 +313,35 @@ class ClashRoyaleEnv(gym.Env):
                 reward -= 10.0
 
         return reward
+
+    # ── recording & IL extraction ──────────────────────────────────────
+
+    def get_game_record(self) -> Optional[GameRecord]:
+        """Return the :class:`GameRecord` from the most recently finished episode.
+
+        Only available when ``record=True`` was passed at construction.
+        """
+        return self.engine.get_last_record()
+
+    def extract_il_episodes(
+        self, record: Optional[GameRecord] = None,
+    ) -> List[List[Transition]]:
+        """Extract **4 IL episodes** from the last game (or a provided record).
+
+        Uses symmetry transforms (y-flip for P1 normalisation, x-flip for
+        horizontal mirror) to generate 4 training trajectories from 1 game.
+
+        Returns a list of 4 episode trajectories, each being a list of
+        :class:`Transition` objects with numpy feature-vector states.
+        """
+        rec = record or self.get_game_record()
+        if rec is None:
+            raise ValueError(
+                "No game record available. Pass record=True to the env "
+                "or provide a GameRecord explicitly."
+            )
+        extractor = EpisodeExtractor(
+            encoder=self._to_feature_vector,
+            fog_of_war=self.fog_of_war,
+        )
+        return extractor.extract(rec)

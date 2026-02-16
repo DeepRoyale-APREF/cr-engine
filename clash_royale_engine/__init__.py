@@ -7,6 +7,12 @@ and optimized for massive-scale RL agent training.
 """
 
 from clash_royale_engine.core.engine import ClashRoyaleEngine
+from clash_royale_engine.core.recorder import (
+    EpisodeExtractor,
+    GameRecord,
+    GameRecorder,
+    Transition,
+)
 from clash_royale_engine.core.state import (
     Card,
     Numbers,
@@ -27,6 +33,10 @@ __version__ = "0.1.0"
 __all__ = [
     "ClashRoyaleEngine",
     "ClashRoyaleEnv",
+    "EpisodeExtractor",
+    "GameRecord",
+    "GameRecorder",
+    "Transition",
     "Card",
     "Numbers",
     "Position",

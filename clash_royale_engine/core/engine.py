@@ -48,6 +48,13 @@ from clash_royale_engine.utils.constants import (
 from clash_royale_engine.utils.converters import tile_to_pixel
 from clash_royale_engine.utils.validators import InvalidActionError, validate_action
 
+# Recorder is optional — only imported when used
+try:
+    from clash_royale_engine.core.recorder import GameRecorder, GameRecord
+except ImportError:  # pragma: no cover
+    GameRecorder = None  # type: ignore[assignment,misc]
+    GameRecord = None  # type: ignore[assignment,misc]
+
 
 class ClashRoyaleEngine:
     """
@@ -106,6 +113,10 @@ class ClashRoyaleEngine:
         # Previous tower HP (for reward computation)
         self._prev_tower_hp: Dict[str, float] = {}
 
+        # ── Recording (optional) ──────────────────────────────────────────
+        self.recorder: Optional["GameRecorder"] = None
+        self._last_record: Optional["GameRecord"] = None
+
         # Perform initial setup
         self.reset()
 
@@ -121,8 +132,27 @@ class ClashRoyaleEngine:
     def all_entities(self) -> List[Entity]:
         return self.arena.get_alive_entities()
 
+    def enable_recording(self) -> None:
+        """Enable per-frame game recording for IL / replay."""
+        if GameRecorder is not None:
+            self.recorder = GameRecorder()
+        else:
+            raise ImportError("GameRecorder not available")
+
+    def get_last_record(self) -> Optional["GameRecord"]:
+        """Return the :class:`GameRecord` from the most recent episode."""
+        return self._last_record
+
     def reset(self) -> State:
         """Reset the engine to a fresh game state and return P0's initial State."""
+        # Finalise previous recording (if any)
+        if self.recorder is not None and len(self.recorder._frames) > 0:
+            self._last_record = self.recorder.build_record(
+                winner=self._winner,
+                deck_p0=self.players[0].deck,
+                deck_p1=self.players[1].deck,
+            )
+
         reset_entity_id_counter()
         self.scheduler.reset()
         self.arena.reset()
@@ -141,6 +171,10 @@ class ClashRoyaleEngine:
         self.player2_interface.reset()
 
         self._snapshot_tower_hp()
+
+        if self.recorder is not None:
+            self.recorder.reset()
+
         return self._get_state(player_id=0)
 
     # ── stepping (both players controlled internally) ─────────────────────
@@ -180,11 +214,16 @@ class ClashRoyaleEngine:
             return self._get_state(0), self._get_state(1), True
 
         # Validate & apply the provided action
+        valid_own: Optional[Tuple[int, int, int]] = None
         if action is not None:
-            err = validate_action(player_id, action, self.players[player_id])
+            err = validate_action(
+                player_id, action, self.players[player_id],
+                **self._enemy_tower_flags(player_id),
+            )
             if err is not None:
                 raise InvalidActionError(err)
             self._apply_action(player_id, action)
+            valid_own = action
 
         # Let opponent act
         opponent_id = 1 - player_id
@@ -194,10 +233,24 @@ class ClashRoyaleEngine:
             if opponent_id == 1
             else self.player1_interface.get_action(opp_state)
         )
+        valid_opp: Optional[Tuple[int, int, int]] = None
         if opp_action is not None:
-            err = validate_action(opponent_id, opp_action, self.players[opponent_id])
+            err = validate_action(
+                opponent_id, opp_action, self.players[opponent_id],
+                **self._enemy_tower_flags(opponent_id),
+            )
             if err is None:
                 self._apply_action(opponent_id, opp_action)
+                valid_opp = opp_action
+
+        # Record actions
+        if self.recorder is not None:
+            self.recorder.record_action(
+                player_id, valid_own,
+            )
+            self.recorder.record_action(
+                opponent_id, valid_opp,
+            )
 
         # Physics / combat tick
         self._simulate_frame()
@@ -219,6 +272,14 @@ class ClashRoyaleEngine:
     def get_state(self, player_id: int) -> State:
         return self._get_state(player_id)
 
+    def _enemy_tower_flags(self, player_id: int) -> dict:
+        """Return kwargs for *validate_action* about enemy princess towers."""
+        opp = 1 - player_id
+        return {
+            "enemy_left_princess_dead": self.arena.tower_hp(opp, "left_princess") <= 0,
+            "enemy_right_princess_dead": self.arena.tower_hp(opp, "right_princess") <= 0,
+        }
+
     # ══════════════════════════════════════════════════════════════════════
     # Internal simulation
     # ══════════════════════════════════════════════════════════════════════
@@ -232,15 +293,25 @@ class ClashRoyaleEngine:
         a0 = self.player1_interface.get_action(s0)
         a1 = self.player2_interface.get_action(s1)
 
+        valid_a0: Optional[Tuple[int, int, int]] = None
+        valid_a1: Optional[Tuple[int, int, int]] = None
+
         if a0 is not None:
-            err = validate_action(0, a0, self.players[0])
+            err = validate_action(0, a0, self.players[0], **self._enemy_tower_flags(0))
             if err is None:
                 self._apply_action(0, a0)
+                valid_a0 = a0
 
         if a1 is not None:
-            err = validate_action(1, a1, self.players[1])
+            err = validate_action(1, a1, self.players[1], **self._enemy_tower_flags(1))
             if err is None:
                 self._apply_action(1, a1)
+                valid_a1 = a1
+
+        # Record actions before simulation
+        if self.recorder is not None:
+            self.recorder.record_action(0, valid_a0)
+            self.recorder.record_action(1, valid_a1)
 
         self._simulate_frame()
 
@@ -277,6 +348,15 @@ class ClashRoyaleEngine:
 
         # Snapshot tower HP for reward delta
         self._snapshot_tower_hp()
+
+        # Record frame (god-view, before advancing clock)
+        if self.recorder is not None:
+            self.recorder.record_frame(
+                frame=self.scheduler.current_frame,
+                time_remaining=self.scheduler.time_remaining,
+                state_p0=self._get_state(0),
+                state_p1=self._get_state(1),
+            )
 
         # Advance clock
         self.scheduler.advance()

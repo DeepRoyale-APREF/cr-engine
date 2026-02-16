@@ -89,8 +89,8 @@ bash Miniforge3-$(uname)-$(uname -m).sh
 **Opción A — Desde `environment.yaml` (recomendado para entrenamiento con GPU NVIDIA):**
 
 ```bash
-conda env create -f environment.yaml
-conda activate cr-engine
+mamba env create -f environment.yaml
+mamba activate cr-engine
 ```
 
 Esto instala Python 3.12, PyTorch con CUDA 12.1 y el paquete en modo editable con dependencias de RL.
@@ -98,16 +98,16 @@ Esto instala Python 3.12, PyTorch con CUDA 12.1 y el paquete en modo editable co
 **Opción B — Entorno manual (CPU-only o GPU AMD):**
 
 ```bash
-conda create -n cr-engine python=3.12 -y
-conda activate cr-engine
+mamba create -n cr-engine python=3.12 -y
+mamba activate cr-engine
 pip install -e ".[dev]"
 ```
 
 **Opción C — Con soporte de RL (sin CUDA, solo CPU):**
 
 ```bash
-conda create -n cr-engine python=3.12 -y
-conda activate cr-engine
+mamba create -n cr-engine python=3.12 -y
+mamba activate cr-engine
 pip install -e ".[dev,rl]"
 ```
 
@@ -238,7 +238,7 @@ cr-engine/
 │       └── renderer.py          # Placeholder para GUI (Fase 2)
 ├── tests/
 │   └── test_engine.py           # 28 tests (motor, física, combate, gym interface)
-├── environment.yaml             # Entorno Conda con PyTorch + CUDA
+├── environment.yaml             # Entorno Mamba con PyTorch + CUDA
 ├── pyproject.toml               # Configuración del paquete y herramientas
 └── AGENTS.md                    # Especificación completa del motor
 ```
