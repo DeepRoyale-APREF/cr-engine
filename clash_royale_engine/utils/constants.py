@@ -46,6 +46,12 @@ BRIDGE_LEFT_X: int = 3
 BRIDGE_RIGHT_X: int = 14
 BRIDGE_Y: int = 15  # tile y where bridge sits (boundary between halves)
 
+# River geometry — the river is a 2-tile-deep horizontal band that blocks
+# ground movement.  Only bridge tiles allow crossing.
+RIVER_Y_MIN: float = 15.0   # bottom edge of river (== BRIDGE_Y)
+RIVER_Y_MAX: float = 17.0   # top edge of river (2 tiles deep)
+BRIDGE_WIDTH: float = 2.0   # each bridge spans 2 tiles in x
+
 # ────────────────────────────── TOWER CONFIGURATIONS ───────────────────────────
 PRINCESS_TOWER_STATS: Dict[str, Any] = {
     "name": "princess_tower",
