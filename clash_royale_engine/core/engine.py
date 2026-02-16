@@ -134,6 +134,9 @@ class ClashRoyaleEngine:
         for p in self.players:
             p.reset(seed=self.seed)
 
+        # Sync elixir from system → player objects (validators read player.elixir)
+        self._sync_elixir()
+
         self.player1_interface.reset()
         self.player2_interface.reset()
 
@@ -261,6 +264,7 @@ class ClashRoyaleEngine:
 
         # Elixir
         self.elixir_system.update(self.scheduler.is_double_elixir)
+        self._sync_elixir()
 
         # King tower activation when enemy crosses bridge
         self._check_king_activation()
@@ -277,6 +281,14 @@ class ClashRoyaleEngine:
         # Advance clock
         self.scheduler.advance()
 
+    def _sync_elixir(self) -> None:
+        """Copy elixir values from ElixirSystem into Player objects.
+
+        Validators read ``player.elixir`` so the two must stay in sync.
+        """
+        for p in self.players:
+            p.elixir = self.elixir_system.get(p.player_id)
+
     def _apply_action(self, player_id: int, action: Tuple[int, int, int]) -> None:
         tile_x, tile_y, card_idx = action
         player = self.players[player_id]
@@ -286,6 +298,9 @@ class ClashRoyaleEngine:
         # Spend elixir
         if not self.elixir_system.spend(player_id, cost):
             return  # silently fail
+
+        # Keep player object in sync after spending
+        self._sync_elixir()
 
         # Play card (cycle hand)
         player.play_card(card_idx)
