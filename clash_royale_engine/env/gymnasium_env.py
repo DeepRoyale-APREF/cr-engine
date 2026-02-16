@@ -152,8 +152,10 @@ class ClashRoyaleEnv(gym.Env):
                 player_id=0, action=decoded
             )
         except InvalidActionError:
-            state_p0 = self.engine.get_state(player_id=0)
-            done = self.engine.is_done()
+            # Action was invalid — still advance one frame so time progresses
+            state_p0, _, done = self.engine.step_with_action(
+                player_id=0, action=None
+            )
             action_valid = False
 
         reward = self._calculate_reward(state_p0, action_valid)
