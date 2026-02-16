@@ -27,7 +27,6 @@ from clash_royale_engine.systems.elixir import ElixirSystem
 from clash_royale_engine.systems.physics import PhysicsEngine
 from clash_royale_engine.systems.targeting import TargetingSystem
 from clash_royale_engine.utils.constants import (
-    BRIDGE_Y,
     CARD_STATS,
     DEFAULT_DECK,
     DEFAULT_FPS,
@@ -439,20 +438,19 @@ class ClashRoyaleEngine:
         return None  # true draw
 
     def _check_king_activation(self) -> None:
-        """Activate king tower if an enemy troop crosses the bridge."""
+        """Activate king tower when a princess tower is destroyed.
+
+        In real Clash Royale the king tower wakes up when:
+        1. It takes direct damage (handled in :class:`CombatSystem`).
+        2. A friendly princess tower is destroyed (handled here).
+        """
         for pid in (0, 1):
             king = self.arena.king_tower(pid)
             if king is None or king.is_active:
                 continue
-            enemy_id = 1 - pid
-            for e in self.arena.get_entities_for_player(enemy_id):
-                if e.is_building or e.is_dead:
-                    continue
-                # Player 0's bridge crossing: enemy (pid=1) at y < BRIDGE_Y
-                if pid == 0 and e.y < BRIDGE_Y:
-                    king.activate()
-                    break
-                if pid == 1 and e.y > BRIDGE_Y:
+            # Check if any of this player's princess towers have been destroyed
+            for side in ("left_princess", "right_princess"):
+                if self.arena.tower_hp(pid, side) <= 0:
                     king.activate()
                     break
 
@@ -468,6 +466,12 @@ class ClashRoyaleEngine:
         enemies = self._detections_for(opponent_id)
 
         # Tower HPs — from player's perspective
+        # King tower active flags
+        own_king = self.arena.king_tower(player_id)
+        opp_king = self.arena.king_tower(opponent_id)
+        king_active = own_king.is_active if own_king is not None else False
+        enemy_king_active = opp_king.is_active if opp_king is not None else False
+
         numbers = Numbers(
             elixir=elixir,
             enemy_elixir=self.elixir_system.get(opponent_id),
@@ -478,6 +482,8 @@ class ClashRoyaleEngine:
             right_enemy_princess_hp=self.arena.tower_hp(opponent_id, "right_princess"),
             enemy_king_hp=self.arena.tower_hp(opponent_id, "king"),
             time_remaining=self.scheduler.time_remaining,
+            king_active=king_active,
+            enemy_king_active=enemy_king_active,
         )
 
         # Cards
@@ -511,7 +517,7 @@ class ClashRoyaleEngine:
                 target=e.target_type,
                 transport=e.transport,
             )
-            detections.append(UnitDetection(unit=unit, position=pos))
+            detections.append(UnitDetection(unit=unit, position=pos, hp=e.hp, max_hp=e.max_hp))
         return detections
 
     @staticmethod

@@ -150,8 +150,8 @@ class PhysicsEngine:
             goal_x, goal_y = target.x, target.y
             dist = float(np.hypot(goal_x - entity.x, goal_y - entity.y))
 
-            # Already in attack range → stop
-            if dist <= entity.attack_range:
+            # Already in attack range → stop (match combat's fire distance)
+            if dist <= entity.attack_range + target.hitbox_radius:
                 return np.array([0.0, 0.0])
         else:
             # No target — advance toward enemy side
@@ -187,7 +187,13 @@ class PhysicsEngine:
         * Jumping completely *over* the river in a single frame.
         * Already inside the river (e.g. pushed by separation) but not on
           a bridge — snap to the nearest bank.
+
+        Uses a 0.3-tile margin from the river edge so that separation
+        forces don't immediately push the troop back into the water
+        (preventing oscillation at the boundary).
         """
+        _BANK_MARGIN: float = 0.3
+
         in_river = RIVER_Y_MIN <= new_y <= RIVER_Y_MAX
 
         # Fast-entity hop: crossed from one bank to the other in one frame
@@ -204,19 +210,25 @@ class PhysicsEngine:
 
         # Clamp to the bank the entity came from
         if old_y < RIVER_Y_MIN:
-            return RIVER_Y_MIN - 0.01
+            return RIVER_Y_MIN - _BANK_MARGIN
         if old_y > RIVER_Y_MAX:
-            return RIVER_Y_MAX + 0.01
+            return RIVER_Y_MAX + _BANK_MARGIN
 
         # Entity was already in the river (edge case) — push to nearest bank
         mid = (RIVER_Y_MIN + RIVER_Y_MAX) / 2.0
-        return (RIVER_Y_MIN - 0.01) if old_y < mid else (RIVER_Y_MAX + 0.01)
+        return (RIVER_Y_MIN - _BANK_MARGIN) if old_y < mid else (RIVER_Y_MAX + _BANK_MARGIN)
 
     # ── separation ───────────────────────────────────────────────────────
 
     @staticmethod
     def _separation(entity: Entity, all_entities: List[Entity]) -> np.ndarray:
-        """Compute separation steering force to avoid overlaps."""
+        """Compute separation steering force to avoid overlaps.
+
+        Near the river banks the y-component of the force is suppressed
+        when it would push the entity *into* the river, preventing the
+        oscillation cycle where ``_enforce_river`` clamps the troop back
+        and separation pushes it in again next frame.
+        """
         force = np.array([0.0, 0.0])
         for other in all_entities:
             if other is entity or other.is_dead:
@@ -230,5 +242,12 @@ class PhysicsEngine:
                 overlap = min_dist - dist
                 force[0] += (dx / dist) * overlap * 2.0
                 force[1] += (dy / dist) * overlap * 2.0
+
+        # Suppress river-ward y-force for ground troops near the banks
+        if entity.transport == "ground" and not _is_on_bridge(entity.x):
+            near_south_bank = entity.y < RIVER_Y_MIN and entity.y >= RIVER_Y_MIN - 1.0
+            near_north_bank = entity.y > RIVER_Y_MAX and entity.y <= RIVER_Y_MAX + 1.0
+            if (near_south_bank and force[1] > 0) or (near_north_bank and force[1] < 0):
+                force[1] = 0.0
 
         return force

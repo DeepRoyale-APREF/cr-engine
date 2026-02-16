@@ -1,11 +1,21 @@
 """
 Targeting system — official Clash Royale logic.
 
-1. Search for enemies within *sight_range*.
-2. Filter by allowed target type.
-3. Prioritise buildings when unit's ``target_type == "buildings"``.
-4. Pick the closest valid target.
-5. Retain target until it dies or leaves range.
+1. **Target retention** (sticky targeting):
+   - *Building-targeting troops* (e.g. Giant) keep their current target
+     until it **dies**.  They chase across the arena and never switch.
+   - *All/ground-targeting troops* (e.g. Knight, Musketeer) keep their
+     target while **actively attacking** (within attack range).  If they
+     are still *walking* toward a distant target and a closer enemy
+     enters their ``sight_range``, they will **retarget** to the closer
+     enemy (distraction mechanic).
+   - *Buildings / towers* keep their current target while it is within
+     ``sight_range``.  Once the target leaves range or dies, a new
+     target is acquired.
+2. Search for enemies within *sight_range*.
+3. Filter by allowed target type.
+4. Prioritise buildings when unit's ``target_type == "buildings"``.
+5. Pick the closest valid target.
 """
 
 from __future__ import annotations
@@ -28,14 +38,29 @@ class TargetingSystem:
         if not entity.is_deployed or entity.is_dead:
             return None
 
-        # Keep current target if still valid
-        if (
-            entity.current_target is not None
-            and not entity.current_target.is_dead
-            and entity.distance_to(entity.current_target) <= entity.sight_range * 1.2
-        ):
-            return entity.current_target
+        # ── Sticky targeting (true Clash Royale behaviour) ────────────
+        # Building-targeting troops (Giant): absolute lock — never switch.
+        # Other troops: sticky while actively fighting (in attack range).
+        #   While still *walking* toward a distant target, a closer enemy
+        #   that enters sight_range will steal aggro (distraction).
+        # Towers: retain while within firing (sight) range.
+        if entity.current_target is not None and not entity.current_target.is_dead:
+            if not entity.is_static:
+                # Building-targeting troops → never abandon
+                if entity.target_type == "buildings":
+                    return entity.current_target
+                # Other troops: stay locked while in combat range
+                dist_cur = entity.distance_to(entity.current_target)
+                if dist_cur <= entity.attack_range + entity.current_target.hitbox_radius:
+                    return entity.current_target
+                # Walking phase — fall through to re-acquire, which picks
+                # the closest valid enemy (may be the same or a nearer one).
+            else:
+                # Buildings / towers: retain while within firing range
+                if entity.distance_to(entity.current_target) <= entity.sight_range:
+                    return entity.current_target
 
+        # ── Acquire a new target ──────────────────────────────────────
         # Gather candidates in sight range
         in_range: List[Entity] = []
         for t in potential_targets:
@@ -45,18 +70,23 @@ class TargetingSystem:
                 in_range.append(t)
 
         if not in_range:
+            # Building-targeting troops (e.g. Giant) always know where
+            # enemy buildings are — search the whole map as fallback.
+            if entity.target_type == "buildings":
+                all_enemy_buildings = [
+                    t for t in potential_targets
+                    if not t.is_dead
+                    and t.player_id != entity.player_id
+                    and t.is_building
+                ]
+                if all_enemy_buildings:
+                    return min(all_enemy_buildings, key=lambda t: entity.distance_to(t))
             return None
 
         # Filter by target type
         valid = TargetingSystem._filter_by_type(entity.target_type, in_range)
         if not valid:
             return None
-
-        # Buildings-only units prioritise buildings
-        if entity.target_type == "buildings":
-            buildings = [t for t in valid if t.is_building]
-            if buildings:
-                return min(buildings, key=lambda t: entity.distance_to(t))
 
         return min(valid, key=lambda t: entity.distance_to(t))
 
@@ -67,7 +97,7 @@ class TargetingSystem:
         if target_type == "ground":
             return [c for c in candidates if c.transport == "ground"]
         if target_type == "buildings":
-            return [c for c in candidates if c.is_building or c.transport == "ground"]
+            return [c for c in candidates if c.is_building]
         return candidates
 
     @staticmethod

@@ -37,6 +37,8 @@ class UnitDetection:
 
     unit: Unit
     position: Position
+    hp: int = 0
+    max_hp: int = 0
 
 
 @dataclass
@@ -52,6 +54,8 @@ class Numbers:
     right_enemy_princess_hp: float
     enemy_king_hp: float
     time_remaining: float  # seconds
+    king_active: bool = False  # is our king tower active?
+    enemy_king_active: bool = False  # is enemy king tower active?
 
 
 @dataclass

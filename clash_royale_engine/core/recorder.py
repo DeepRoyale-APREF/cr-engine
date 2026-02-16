@@ -162,6 +162,8 @@ def _flip_detection_y(det: UnitDetection) -> UnitDetection:
             tile_x=det.position.tile_x,
             tile_y=new_ty,
         ),
+        hp=det.hp,
+        max_hp=det.max_hp,
     )
 
 
@@ -176,6 +178,8 @@ def _flip_detection_x(det: UnitDetection) -> UnitDetection:
             tile_x=new_tx,
             tile_y=det.position.tile_y,
         ),
+        hp=det.hp,
+        max_hp=det.max_hp,
     )
 
 

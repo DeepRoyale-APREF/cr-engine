@@ -64,14 +64,12 @@ def validate_placement(
     if not is_spell:
         on_enemy_side = False
 
-        if player_id == 0:
-            # Player 0 (bottom): own side is y 0 .. BRIDGE_Y-1
-            if tile_y >= BRIDGE_Y:
-                on_enemy_side = True
-        else:
-            # Player 1 (top): own side is y (N_HEIGHT_TILES-PLAYABLE_HEIGHT_TILES) .. N_HEIGHT_TILES-1
-            if tile_y < (N_HEIGHT_TILES - PLAYABLE_HEIGHT_TILES):
-                on_enemy_side = True
+        # Both players see the world from their own perspective:
+        # tile_y in [0, BRIDGE_Y-1] is "own side", tile_y >= BRIDGE_Y is "enemy side".
+        # The engine flips P1's coordinates in _apply_action, so validation
+        # uses the same player-relative frame for both players.
+        if tile_y >= BRIDGE_Y:
+            on_enemy_side = True
 
         if on_enemy_side:
             # Check whether the placement is inside an unlocked pocket
@@ -118,17 +116,12 @@ def _is_pocket_allowed(
     if not lane_unlocked:
         return False
 
-    # Verify the tile is within the pocket depth (not deep into enemy base)
-    if player_id == 0:
-        # P0 attacks upward — pocket is just past the river on P1's side
-        pocket_min_y = int(RIVER_Y_MAX)  # 17
-        pocket_max_y = int(RIVER_Y_MAX) + POCKET_DEPTH - 1  # 19
-        return pocket_min_y <= tile_y <= pocket_max_y
-    else:
-        # P1 attacks downward — pocket is just below the river on P0's side
-        pocket_max_y = int(RIVER_Y_MIN) - 1  # 14
-        pocket_min_y = int(RIVER_Y_MIN) - POCKET_DEPTH  # 12
-        return pocket_min_y <= tile_y <= pocket_max_y
+    # Verify the tile is within the pocket depth (not deep into enemy base).
+    # Both players use the same coordinate frame (own side = low y).
+    # The pocket is just past the river on the enemy's side.
+    pocket_min_y = int(RIVER_Y_MAX)  # 17
+    pocket_max_y = int(RIVER_Y_MAX) + POCKET_DEPTH - 1  # 19
+    return pocket_min_y <= tile_y <= pocket_max_y
 
 
 def validate_action(
