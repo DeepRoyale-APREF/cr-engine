@@ -16,18 +16,15 @@ quadruple the training data from a single match.
 
 from __future__ import annotations
 
-import copy
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from clash_royale_engine.core.state import (
-    Card,
     Numbers,
     Position,
     State,
-    Unit,
     UnitDetection,
 )
 from clash_royale_engine.utils.constants import N_HEIGHT_TILES, N_WIDE_TILES

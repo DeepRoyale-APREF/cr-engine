@@ -14,7 +14,6 @@ import numpy as np
 
 from clash_royale_engine.utils.constants import N_HEIGHT_TILES, N_WIDE_TILES
 
-
 _next_entity_id: int = 0
 
 

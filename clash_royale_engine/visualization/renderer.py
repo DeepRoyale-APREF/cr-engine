@@ -8,10 +8,10 @@ in a window that mirrors the real game layout.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 if TYPE_CHECKING:
-    from clash_royale_engine.core.state import Card, State, UnitDetection
+    from clash_royale_engine.core.state import State, UnitDetection
 
 # ── Lazy pygame import (only when renderer is actually used) ──────────
 _pg: Any = None
@@ -114,7 +114,7 @@ def _draw_text(
     center: bool = False,
 ) -> None:
     """Render text with optional drop shadow."""
-    pg = _ensure_pygame()
+    _ensure_pygame()
     if shadow:
         shadow_surf = font.render(text, True, COL_TEXT_SHADOW)
         r = shadow_surf.get_rect()

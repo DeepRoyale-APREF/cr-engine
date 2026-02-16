@@ -8,18 +8,16 @@ and 4-episode imitation-learning extraction.
 
 from __future__ import annotations
 
-import math
 import time
-from typing import List, Optional, Tuple
 
 import numpy as np
 import pytest
 
 from clash_royale_engine.core.engine import ClashRoyaleEngine
 from clash_royale_engine.core.recorder import (
+    NOOP_ACTION,
     EpisodeExtractor,
     GameRecord,
-    GameRecorder,
     Transition,
     apply_fog_of_war,
     decode_action,
@@ -28,34 +26,27 @@ from clash_royale_engine.core.recorder import (
     flip_action_y,
     flip_state_x,
     flip_state_y,
-    NOOP_ACTION,
 )
 from clash_royale_engine.core.state import State
 from clash_royale_engine.entities.base_entity import Entity, reset_entity_id_counter
-from clash_royale_engine.entities.buildings.king_tower import KingTowerEntity
-from clash_royale_engine.entities.troops.giant import create_giant
 from clash_royale_engine.entities.troops.archers import create_archers
+from clash_royale_engine.entities.troops.giant import create_giant
 from clash_royale_engine.entities.troops.skeletons import create_skeletons
-from clash_royale_engine.env.gymnasium_env import ClashRoyaleEnv, ObservationType
+from clash_royale_engine.env.gymnasium_env import ClashRoyaleEnv
 from clash_royale_engine.env.multi_agent_env import VectorizedClashRoyaleEnv
 from clash_royale_engine.players.player import Player
-from clash_royale_engine.players.player_interface import HeuristicBot, RLAgentPlayer
+from clash_royale_engine.players.player_interface import RLAgentPlayer
 from clash_royale_engine.systems.elixir import ElixirSystem
 from clash_royale_engine.systems.physics import PhysicsEngine
 from clash_royale_engine.utils.constants import (
-    BRIDGE_Y,
     DEFAULT_FPS,
-    ELIXIR_PER_SECOND,
     LANE_DIVIDER_X,
     MAX_ELIXIR,
     N_HEIGHT_TILES,
     N_WIDE_TILES,
-    PLAYABLE_HEIGHT_TILES,
     POCKET_DEPTH,
     RIVER_Y_MAX,
     RIVER_Y_MIN,
-    SPEED_FAST,
-    SPEED_MEDIUM,
     SPEED_SLOW,
     STARTING_ELIXIR,
     TILE_HEIGHT,
@@ -66,7 +57,6 @@ from clash_royale_engine.utils.validators import (
     InvalidActionError,
     validate_placement,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helpers
@@ -507,7 +497,7 @@ class TestPhysics:
     def test_river_blocks_ground_troops(self) -> None:
         """Ground troops cannot enter the river zone at non-bridge positions."""
         from clash_royale_engine.systems.physics import PhysicsEngine, _is_on_bridge
-        from clash_royale_engine.utils.constants import RIVER_Y_MIN, RIVER_Y_MAX
+        from clash_royale_engine.utils.constants import RIVER_Y_MAX, RIVER_Y_MIN
 
         enforce = PhysicsEngine._enforce_river
 
@@ -896,7 +886,7 @@ class TestGameRecording:
 
         record = env.get_game_record()
         assert record is not None
-        has_p0_action = any(fr.action_p0 is not None for fr in record.frames)
+        any(fr.action_p0 is not None for fr in record.frames)
         # P0 fires random actions; at least some should be valid
         # (It's possible all are invalid, so we test that the field exists)
         assert isinstance(record.frames[0].action_p0, (tuple, type(None)))

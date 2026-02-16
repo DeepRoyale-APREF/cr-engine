@@ -25,7 +25,6 @@ from clash_royale_engine.utils.constants import (
     BRIDGE_LEFT_X,
     BRIDGE_RIGHT_X,
     BRIDGE_WIDTH,
-    BRIDGE_Y,
     N_HEIGHT_TILES,
     N_WIDE_TILES,
     RIVER_Y_MAX,

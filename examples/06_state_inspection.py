@@ -23,7 +23,7 @@ sys.path.insert(0, ".")
 from clash_royale_engine.core.engine import ClashRoyaleEngine
 from clash_royale_engine.core.recorder import apply_fog_of_war
 from clash_royale_engine.env.gymnasium_env import ClashRoyaleEnv
-from clash_royale_engine.players.player_interface import HeuristicBot, RLAgentPlayer
+from clash_royale_engine.players.player_interface import HeuristicBot
 from clash_royale_engine.utils.constants import CARD_VOCAB, OBS_FEATURE_DIM
 
 
@@ -66,14 +66,14 @@ def main() -> None:
     obs_full = ClashRoyaleEnv._to_feature_vector(s0)
     obs_fog = ClashRoyaleEnv._to_feature_vector(fogged)
 
-    print(f"\n  ── Feature vector ──")
+    print("\n  ── Feature vector ──")
     print(f"  Dimensión: {OBS_FEATURE_DIM}")
     print(f"  Shape:     {obs_full.shape}")
     print(f"  dtype:     {obs_full.dtype}")
     print(f"  Rango:     [{obs_full.min():.3f}, {obs_full.max():.3f}]")
 
     # Desglosar estructura del vector
-    print(f"\n  ── Estructura del feature vector ──")
+    print("\n  ── Estructura del feature vector ──")
     idx = 0
     print(f"  [{idx:4d}] elixir propio / 10     = {obs_full[0]:.3f}")
     idx += 1

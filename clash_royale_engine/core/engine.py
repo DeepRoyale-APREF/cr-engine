@@ -7,10 +7,7 @@ exposes a frame-stepping API that is player-agnostic.
 
 from __future__ import annotations
 
-import random
-from typing import Any, Dict, List, Optional, Tuple
-
-import numpy as np
+from typing import Dict, List, Optional, Tuple
 
 from clash_royale_engine.core.arena import Arena
 from clash_royale_engine.core.scheduler import Scheduler
@@ -23,7 +20,6 @@ from clash_royale_engine.core.state import (
     UnitDetection,
 )
 from clash_royale_engine.entities.base_entity import Entity, reset_entity_id_counter
-from clash_royale_engine.entities.buildings.king_tower import KingTowerEntity
 from clash_royale_engine.players.player import Player
 from clash_royale_engine.players.player_interface import PlayerInterface
 from clash_royale_engine.systems.combat import CombatSystem
@@ -39,10 +35,7 @@ from clash_royale_engine.utils.constants import (
     DISPLAY_WIDTH,
     GAME_DURATION,
     N_HEIGHT_TILES,
-    N_WIDE_TILES,
     TILE_HEIGHT,
-    TILE_INIT_X,
-    TILE_INIT_Y,
     TILE_WIDTH,
 )
 from clash_royale_engine.utils.converters import tile_to_pixel
@@ -50,7 +43,7 @@ from clash_royale_engine.utils.validators import InvalidActionError, validate_ac
 
 # Recorder is optional — only imported when used
 try:
-    from clash_royale_engine.core.recorder import GameRecorder, GameRecord
+    from clash_royale_engine.core.recorder import GameRecord, GameRecorder
 except ImportError:  # pragma: no cover
     GameRecorder = None  # type: ignore[assignment,misc]
     GameRecord = None  # type: ignore[assignment,misc]
@@ -217,7 +210,9 @@ class ClashRoyaleEngine:
         valid_own: Optional[Tuple[int, int, int]] = None
         if action is not None:
             err = validate_action(
-                player_id, action, self.players[player_id],
+                player_id,
+                action,
+                self.players[player_id],
                 **self._enemy_tower_flags(player_id),
             )
             if err is not None:
@@ -236,7 +231,9 @@ class ClashRoyaleEngine:
         valid_opp: Optional[Tuple[int, int, int]] = None
         if opp_action is not None:
             err = validate_action(
-                opponent_id, opp_action, self.players[opponent_id],
+                opponent_id,
+                opp_action,
+                self.players[opponent_id],
                 **self._enemy_tower_flags(opponent_id),
             )
             if err is None:
@@ -246,10 +243,12 @@ class ClashRoyaleEngine:
         # Record actions
         if self.recorder is not None:
             self.recorder.record_action(
-                player_id, valid_own,
+                player_id,
+                valid_own,
             )
             self.recorder.record_action(
-                opponent_id, valid_opp,
+                opponent_id,
+                valid_opp,
             )
 
         # Physics / combat tick
@@ -430,12 +429,8 @@ class ClashRoyaleEngine:
             return 1
 
         # Tiebreaker: total HP difference on remaining towers
-        hp0 = sum(
-            self.arena.tower_hp(0, t) for t in ("left_princess", "right_princess", "king")
-        )
-        hp1 = sum(
-            self.arena.tower_hp(1, t) for t in ("left_princess", "right_princess", "king")
-        )
+        hp0 = sum(self.arena.tower_hp(0, t) for t in ("left_princess", "right_princess", "king"))
+        hp1 = sum(self.arena.tower_hp(1, t) for t in ("left_princess", "right_princess", "king"))
         if hp0 > hp1:
             return 0
         elif hp1 > hp0:

@@ -67,7 +67,7 @@ def main() -> None:
         print("  ⚠ No se obtuvo GameRecord — algo falló.")
         return
 
-    print(f"\n  GameRecord:")
+    print("\n  GameRecord:")
     print(f"    Frames grabados: {record.total_frames}")
     print(f"    Ganador:         {record.winner}")
     print(f"    Deck P0:         {record.deck_p0}")
@@ -89,7 +89,7 @@ def main() -> None:
 
     # ── Verificar fog-of-war ──────────────────────────────────────────
     sample = episodes[0][0]
-    print(f"\n  Ejemplo de transición (episodio 0, step 0):")
+    print("\n  Ejemplo de transición (episodio 0, step 0):")
     print(f"    state shape:      {sample.state.shape}")
     print(f"    next_state shape: {sample.next_state.shape}")
     print(f"    action (int):     {sample.action}")
@@ -100,7 +100,7 @@ def main() -> None:
     # ── Convertir a numpy batch ───────────────────────────────────────
     batch = EpisodeExtractor.episodes_to_numpy(episodes)
 
-    print(f"\n  Batch numpy (4 episodios concatenados):")
+    print("\n  Batch numpy (4 episodios concatenados):")
     for key, arr in batch.items():
         print(f"    {key:15s}  shape={str(arr.shape):15s}  dtype={arr.dtype}")
 

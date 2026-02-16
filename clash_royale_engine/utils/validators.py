@@ -76,8 +76,11 @@ def validate_placement(
         if on_enemy_side:
             # Check whether the placement is inside an unlocked pocket
             allowed = _is_pocket_allowed(
-                player_id, tile_x, tile_y,
-                enemy_left_princess_dead, enemy_right_princess_dead,
+                player_id,
+                tile_x,
+                tile_y,
+                enemy_left_princess_dead,
+                enemy_right_princess_dead,
             )
             if not allowed:
                 return (
@@ -111,22 +114,20 @@ def _is_pocket_allowed(
     """
     # Determine which lane the tile is in
     in_left_lane = tile_x < LANE_DIVIDER_X
-    lane_unlocked = (in_left_lane and enemy_left_dead) or (
-        not in_left_lane and enemy_right_dead
-    )
+    lane_unlocked = (in_left_lane and enemy_left_dead) or (not in_left_lane and enemy_right_dead)
     if not lane_unlocked:
         return False
 
     # Verify the tile is within the pocket depth (not deep into enemy base)
     if player_id == 0:
         # P0 attacks upward — pocket is just past the river on P1's side
-        pocket_min_y = int(RIVER_Y_MAX)       # 17
+        pocket_min_y = int(RIVER_Y_MAX)  # 17
         pocket_max_y = int(RIVER_Y_MAX) + POCKET_DEPTH - 1  # 19
         return pocket_min_y <= tile_y <= pocket_max_y
     else:
         # P1 attacks downward — pocket is just below the river on P0's side
-        pocket_max_y = int(RIVER_Y_MIN) - 1                  # 14
-        pocket_min_y = int(RIVER_Y_MIN) - POCKET_DEPTH       # 12
+        pocket_max_y = int(RIVER_Y_MIN) - 1  # 14
+        pocket_min_y = int(RIVER_Y_MIN) - POCKET_DEPTH  # 12
         return pocket_min_y <= tile_y <= pocket_max_y
 
 
@@ -146,7 +147,11 @@ def validate_action(
 
     card_name = player.hand[card_idx]
     return validate_placement(
-        player_id, tile_x, tile_y, card_name, player,
+        player_id,
+        tile_x,
+        tile_y,
+        card_name,
+        player,
         enemy_left_princess_dead=enemy_left_princess_dead,
         enemy_right_princess_dead=enemy_right_princess_dead,
     )

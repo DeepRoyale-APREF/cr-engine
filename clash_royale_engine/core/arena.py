@@ -8,7 +8,7 @@ and apply spells.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from clash_royale_engine.entities.base_entity import Entity
 from clash_royale_engine.entities.buildings.king_tower import KingTowerEntity, create_king_tower
@@ -21,7 +21,7 @@ from clash_royale_engine.entities.troops.knight import create_knight
 from clash_royale_engine.entities.troops.mini_pekka import create_mini_pekka
 from clash_royale_engine.entities.troops.musketeer import create_musketeer
 from clash_royale_engine.entities.troops.skeletons import create_skeletons
-from clash_royale_engine.utils.constants import TOWER_POSITIONS, DEFAULT_FPS
+from clash_royale_engine.utils.constants import DEFAULT_FPS, TOWER_POSITIONS
 
 # Registry: card name → factory
 _TROOP_FACTORIES = {

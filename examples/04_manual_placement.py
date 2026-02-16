@@ -126,7 +126,7 @@ def main() -> None:
 
     if "arrows" in hand:
         arrows_idx = hand.index("arrows")
-        print(f"  Acción: Arrows en (9, 25) — hechizo en lado enemigo")
+        print("  Acción: Arrows en (9, 25) — hechizo en lado enemigo")
         try:
             s0, s1, done = engine.step_with_action(0, (9, 25, arrows_idx))
             print("  ✓ Hechizo lanzado correctamente en lado enemigo")
@@ -134,7 +134,7 @@ def main() -> None:
             print(f"  ✗ Error: {e}")
     elif "fireball" in hand:
         fb_idx = hand.index("fireball")
-        print(f"  Acción: Fireball en (9, 25) — hechizo en lado enemigo")
+        print("  Acción: Fireball en (9, 25) — hechizo en lado enemigo")
         try:
             s0, s1, done = engine.step_with_action(0, (9, 25, fb_idx))
             print("  ✓ Hechizo lanzado correctamente en lado enemigo")

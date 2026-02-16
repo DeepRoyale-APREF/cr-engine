@@ -23,13 +23,11 @@ sys.path.insert(0, ".")
 from clash_royale_engine.core.engine import ClashRoyaleEngine
 from clash_royale_engine.players.player_interface import RLAgentPlayer
 from clash_royale_engine.utils.constants import (
+    CARD_STATS,
     LANE_DIVIDER_X,
-    N_HEIGHT_TILES,
     POCKET_DEPTH,
     RIVER_Y_MAX,
-    RIVER_Y_MIN,
 )
-from clash_royale_engine.utils.constants import CARD_STATS
 from clash_royale_engine.utils.validators import InvalidActionError
 
 TROOP_NAMES = [
@@ -83,7 +81,7 @@ def main() -> None:
     troop_idx, troop_name = _find_troop_idx(engine, 0)
     print(f"\n  Mano de P0: {engine.players[0].hand}")
 
-    print(f"\n  1) Intentar tropa en lado enemigo (torres vivas):")
+    print("\n  1) Intentar tropa en lado enemigo (torres vivas):")
     try_place(engine, 0, pocket_x_left, pocket_y, troop_idx,
               f"{troop_name} en ({pocket_x_left}, {pocket_y}) carril izquierdo")
 
@@ -93,7 +91,7 @@ def main() -> None:
               f"{troop_name} en ({pocket_x_right}, {pocket_y}) carril derecho")
 
     # ── 2) Hechizo en lado enemigo (siempre permitido) ────────────────
-    print(f"\n  2) Hechizo en lado enemigo (siempre permitido):")
+    print("\n  2) Hechizo en lado enemigo (siempre permitido):")
     _refill_elixir(engine)
 
     spell_name = None
@@ -111,14 +109,14 @@ def main() -> None:
         print("    (no hay hechizo en mano, saltando)")
 
     # ── 3) Destruir torre princesa izquierda del enemigo (P1) ─────────
-    print(f"\n  3) Destruyendo torre princesa IZQUIERDA de P1...")
+    print("\n  3) Destruyendo torre princesa IZQUIERDA de P1...")
     tower = engine.arena.towers["p1_left_princess"]
     print(f"     HP antes: {tower.hp:.0f}")
     tower.hp = 0  # forzar destrucción
     print(f"     HP después: {tower.hp:.0f}  (destruida)")
 
     # ── 4) Ahora intentar colocar en pocket izquierdo ──────────────────
-    print(f"\n  4) Colocar en pocket IZQUIERDO (torre destruida):")
+    print("\n  4) Colocar en pocket IZQUIERDO (torre destruida):")
     for dy in range(POCKET_DEPTH + 1):
         _refill_elixir(engine)
         troop_idx, troop_name = _find_troop_idx(engine, 0)
@@ -131,35 +129,35 @@ def main() -> None:
         try_place(engine, 0, pocket_x_left, y, troop_idx, label)
 
     # ── 5) Pocket derecho aún bloqueado ───────────────────────────────
-    print(f"\n  5) Pocket DERECHO (torre derecha aún viva):")
+    print("\n  5) Pocket DERECHO (torre derecha aún viva):")
     _refill_elixir(engine)
     troop_idx, troop_name = _find_troop_idx(engine, 0)
     try_place(engine, 0, pocket_x_right, pocket_y, troop_idx,
               f"{troop_name} en ({pocket_x_right}, {pocket_y}) carril derecho")
 
     # ── 6) Destruir torre derecha y verificar ──────────────────────────
-    print(f"\n  6) Destruyendo torre princesa DERECHA de P1...")
+    print("\n  6) Destruyendo torre princesa DERECHA de P1...")
     tower_r = engine.arena.towers["p1_right_princess"]
     tower_r.hp = 0
-    print(f"     Torre derecha destruida.")
+    print("     Torre derecha destruida.")
 
     _refill_elixir(engine)
     troop_idx, troop_name = _find_troop_idx(engine, 0)
 
-    print(f"\n  7) Colocar en pocket DERECHO (torre destruida):")
+    print("\n  7) Colocar en pocket DERECHO (torre destruida):")
     try_place(engine, 0, pocket_x_right, pocket_y, troop_idx,
               f"{troop_name} en ({pocket_x_right}, {pocket_y}) carril derecho")
 
     # ── Resumen ────────────────────────────────────────────────────────
-    print(f"\n" + "─" * 65)
-    print(f"  Resumen de reglas:")
-    print(f"    • Tropas en lado propio: siempre ✓")
-    print(f"    • Tropas en lado enemigo: ✗ (bloqueado por defecto)")
-    print(f"    • Hechizos en cualquier parte: siempre ✓")
+    print("\n" + "─" * 65)
+    print("  Resumen de reglas:")
+    print("    • Tropas en lado propio: siempre ✓")
+    print("    • Tropas en lado enemigo: ✗ (bloqueado por defecto)")
+    print("    • Hechizos en cualquier parte: siempre ✓")
     print(f"    • Pocket izquierdo (x < {LANE_DIVIDER_X}): se desbloquea al destruir")
-    print(f"      la torre princesa izquierda enemiga")
+    print("      la torre princesa izquierda enemiga")
     print(f"    • Pocket derecho (x >= {LANE_DIVIDER_X}): se desbloquea al destruir")
-    print(f"      la torre princesa derecha enemiga")
+    print("      la torre princesa derecha enemiga")
     print(f"    • Profundidad del pocket: {POCKET_DEPTH} tiles pasando el río")
     print(f"      (y = {int(RIVER_Y_MAX)} a {int(RIVER_Y_MAX) + POCKET_DEPTH - 1} para P0)")
     print("═" * 65)

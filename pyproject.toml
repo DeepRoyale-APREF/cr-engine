@@ -19,7 +19,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-
 rl = [
     "stable-baselines3>=2.3",
     "torch",
@@ -28,10 +27,9 @@ rl = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
-    "mypy>=1.8",
-    "black>=24.0",
-    "isort>=5.13",
     "ruff>=0.5",
+    "pyrefly>=0.52.0",
+    "mypy>=1.8",  # Opcional: mantenlo si lo usas en terminal/CI
 ]
 
 render = [
@@ -41,13 +39,11 @@ render = [
 [tool.setuptools.packages.find]
 include = ["clash_royale_engine*"]
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ["py312"]
-
-[tool.isort]
-profile = "black"
-line_length = 100
+target-version = "py312"
+# Ruff por defecto ya incluye las reglas de isort y sigue el estilo de black
+lint.select = ["E", "F", "I"] 
 
 [tool.mypy]
 python_version = "3.12"
@@ -58,7 +54,3 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 addopts = "-v --tb=short -ra"
 markers = ["slow: marks tests as slow"]
-
-[tool.ruff]
-line-length = 100
-target-version = "py312"

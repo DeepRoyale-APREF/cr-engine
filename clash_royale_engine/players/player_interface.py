@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional, Tuple
 
 from clash_royale_engine.core.state import State
-from clash_royale_engine.utils.constants import CARD_STATS, N_HEIGHT_TILES, N_WIDE_TILES
+from clash_royale_engine.utils.constants import N_HEIGHT_TILES
 
 
 class PlayerInterface(ABC):
