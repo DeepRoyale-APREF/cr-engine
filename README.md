@@ -78,16 +78,7 @@ La alternativa recomendada es entrenar en **Google Colab** con GPU NVIDIA gratui
 
 ### 1. Instalar Miniforge (Conda)
 
-Descargar e instalar [Miniforge](https://github.com/conda-forge/miniforge) para tu sistema operativo:
-
-```bash
-# Windows (PowerShell como administrador)
-winget install CondaForge.Miniforge3
-
-# Linux / macOS
-curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
-bash Miniforge3-$(uname)-$(uname -m).sh
-```
+Descargar e instalar [Miniforge](https://github.com/conda-forge/miniforge) para tu sistema operativo
 
 ### 2. Crear el entorno virtual
 
