@@ -7,10 +7,6 @@ Construir un motor de simulación completo de Clash Royale (Arena 1) enfocado en
 
 ## CONTEXTO Y ARQUITECTURA BASE
 
-### Repositorios de Referencia
-- **MSU-AI/clash-royale-gym**: Framework base incompleto con estructura Gymnasium
-- **Pbatch/ClashRoyaleBuildABot**: Sistema de detección y formato de estado
-
 ### Stack Tecnológico
 - Python 3.12.12 (compatible con Google Colab)
 - Gymnasium (compatibilidad OpenAI Gym)

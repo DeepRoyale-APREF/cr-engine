@@ -1,0 +1,487 @@
+"""
+ClashRoyaleEngine — the main game engine.
+
+Orchestrates all sub-systems (physics, combat, targeting, elixir) and
+exposes a frame-stepping API that is player-agnostic.
+"""
+
+from __future__ import annotations
+
+import random
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+
+from clash_royale_engine.core.arena import Arena
+from clash_royale_engine.core.scheduler import Scheduler
+from clash_royale_engine.core.state import (
+    Card,
+    Numbers,
+    Position,
+    State,
+    Unit,
+    UnitDetection,
+)
+from clash_royale_engine.entities.base_entity import Entity, reset_entity_id_counter
+from clash_royale_engine.entities.buildings.king_tower import KingTowerEntity
+from clash_royale_engine.players.player import Player
+from clash_royale_engine.players.player_interface import PlayerInterface
+from clash_royale_engine.systems.combat import CombatSystem
+from clash_royale_engine.systems.elixir import ElixirSystem
+from clash_royale_engine.systems.physics import PhysicsEngine
+from clash_royale_engine.systems.targeting import TargetingSystem
+from clash_royale_engine.utils.constants import (
+    BRIDGE_Y,
+    CARD_STATS,
+    DEFAULT_DECK,
+    DEFAULT_FPS,
+    DISPLAY_HEIGHT,
+    DISPLAY_WIDTH,
+    GAME_DURATION,
+    N_HEIGHT_TILES,
+    N_WIDE_TILES,
+    TILE_HEIGHT,
+    TILE_INIT_X,
+    TILE_INIT_Y,
+    TILE_WIDTH,
+)
+from clash_royale_engine.utils.converters import tile_to_pixel
+from clash_royale_engine.utils.validators import InvalidActionError, validate_action
+
+
+class ClashRoyaleEngine:
+    """
+    Main game engine — player-agnostic.
+
+    Parameters
+    ----------
+    player1, player2 : PlayerInterface
+        Objects that produce actions each frame.
+    deck1, deck2 : list[str]
+        Card names for each player's deck.
+    fps : int
+        Simulation framerate.
+    time_limit : float
+        Game duration in seconds (before overtime).
+    speed_multiplier : float
+        Multiplier applied when stepping multiple frames at once.
+    """
+
+    def __init__(
+        self,
+        player1: PlayerInterface,
+        player2: PlayerInterface,
+        deck1: Optional[List[str]] = None,
+        deck2: Optional[List[str]] = None,
+        fps: int = DEFAULT_FPS,
+        time_limit: float = GAME_DURATION,
+        speed_multiplier: float = 1.0,
+        seed: int = 0,
+    ) -> None:
+        self.player1_interface = player1
+        self.player2_interface = player2
+        self.fps = fps
+        self.speed_multiplier = speed_multiplier
+        self.seed = seed
+
+        # Sub-systems
+        self.scheduler = Scheduler(fps=fps)
+        self.scheduler.game_duration = time_limit
+        self.arena = Arena(fps=fps)
+        self.physics = PhysicsEngine(fps=fps)
+        self.combat = CombatSystem(fps=fps)
+        self.targeting = TargetingSystem()
+        self.elixir_system = ElixirSystem(fps=fps)
+
+        # Player state
+        self.players: List[Player] = [
+            Player(0, deck1 or list(DEFAULT_DECK), seed=seed),
+            Player(1, deck2 or list(DEFAULT_DECK), seed=seed),
+        ]
+
+        # Game-over state
+        self._done: bool = False
+        self._winner: Optional[int] = None  # 0, 1, or None (draw)
+
+        # Previous tower HP (for reward computation)
+        self._prev_tower_hp: Dict[str, float] = {}
+
+        # Perform initial setup
+        self.reset()
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Public API
+    # ══════════════════════════════════════════════════════════════════════
+
+    @property
+    def current_frame(self) -> int:
+        return self.scheduler.current_frame
+
+    @property
+    def all_entities(self) -> List[Entity]:
+        return self.arena.get_alive_entities()
+
+    def reset(self) -> State:
+        """Reset the engine to a fresh game state and return P0's initial State."""
+        reset_entity_id_counter()
+        self.scheduler.reset()
+        self.arena.reset()
+        self.combat.reset()
+        self.elixir_system.reset()
+        self._done = False
+        self._winner = None
+
+        for p in self.players:
+            p.reset(seed=self.seed)
+
+        self.player1_interface.reset()
+        self.player2_interface.reset()
+
+        self._snapshot_tower_hp()
+        return self._get_state(player_id=0)
+
+    # ── stepping (both players controlled internally) ─────────────────────
+
+    def step(self, frames: int = 1) -> Tuple[State, State, bool]:
+        """
+        Advance the simulation *frames* frames, querying both player
+        interfaces for actions each frame.
+
+        Returns ``(state_p0, state_p1, done)``.
+        """
+        effective = max(1, int(frames * self.speed_multiplier))
+        for _ in range(effective):
+            if self._done:
+                break
+            self._tick_one_frame()
+        return (
+            self._get_state(0),
+            self._get_state(1),
+            self._done,
+        )
+
+    # ── stepping (action injected externally — used by Gym env) ──────────
+
+    def step_with_action(
+        self,
+        player_id: int,
+        action: Optional[Tuple[int, int, int]],
+    ) -> Tuple[State, State, bool]:
+        """
+        Step one frame. *player_id*'s action is provided; the opponent
+        acts through its PlayerInterface.
+
+        Raises :class:`InvalidActionError` if *action* is not valid.
+        """
+        if self._done:
+            return self._get_state(0), self._get_state(1), True
+
+        # Validate & apply the provided action
+        if action is not None:
+            err = validate_action(player_id, action, self.players[player_id])
+            if err is not None:
+                raise InvalidActionError(err)
+            self._apply_action(player_id, action)
+
+        # Let opponent act
+        opponent_id = 1 - player_id
+        opp_state = self._get_state(opponent_id)
+        opp_action = (
+            self.player2_interface.get_action(opp_state)
+            if opponent_id == 1
+            else self.player1_interface.get_action(opp_state)
+        )
+        if opp_action is not None:
+            err = validate_action(opponent_id, opp_action, self.players[opponent_id])
+            if err is None:
+                self._apply_action(opponent_id, opp_action)
+
+        # Physics / combat tick
+        self._simulate_frame()
+
+        return self._get_state(0), self._get_state(1), self._done
+
+    # ── queries ───────────────────────────────────────────────────────────
+
+    def is_done(self) -> bool:
+        return self._done
+
+    def has_winner(self) -> bool:
+        return self._winner is not None
+
+    def get_winner(self) -> Optional[int]:
+        """0 = player 0 wins, 1 = player 1 wins, None = draw."""
+        return self._winner
+
+    def get_state(self, player_id: int) -> State:
+        return self._get_state(player_id)
+
+    # ══════════════════════════════════════════════════════════════════════
+    # Internal simulation
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _tick_one_frame(self) -> None:
+        """One full frame: read actions → apply → simulate."""
+        # Player actions
+        s0 = self._get_state(0)
+        s1 = self._get_state(1)
+
+        a0 = self.player1_interface.get_action(s0)
+        a1 = self.player2_interface.get_action(s1)
+
+        if a0 is not None:
+            err = validate_action(0, a0, self.players[0])
+            if err is None:
+                self._apply_action(0, a0)
+
+        if a1 is not None:
+            err = validate_action(1, a1, self.players[1])
+            if err is None:
+                self._apply_action(1, a1)
+
+        self._simulate_frame()
+
+    def _simulate_frame(self) -> None:
+        """Physics, targeting, combat, elixir, cleanup, game-over check."""
+        alive = self.arena.get_alive_entities()
+
+        # Deployment ticking
+        for e in alive:
+            e.tick_deploy()
+
+        # Targeting
+        self.targeting.update_targets(alive, alive)
+
+        # Physics
+        self.physics.update(alive)
+
+        # Combat
+        self.combat.process_attacks(alive, self.scheduler.current_frame)
+        self.combat.update_projectiles()
+
+        # Elixir
+        self.elixir_system.update(self.scheduler.is_double_elixir)
+
+        # King tower activation when enemy crosses bridge
+        self._check_king_activation()
+
+        # Remove dead troops (keep dead buildings for state awareness)
+        self.arena.cleanup_dead()
+
+        # Game-over
+        self._check_game_over()
+
+        # Snapshot tower HP for reward delta
+        self._snapshot_tower_hp()
+
+        # Advance clock
+        self.scheduler.advance()
+
+    def _apply_action(self, player_id: int, action: Tuple[int, int, int]) -> None:
+        tile_x, tile_y, card_idx = action
+        player = self.players[player_id]
+        card_name = player.hand[card_idx]
+        cost = CARD_STATS[card_name]["elixir"]
+
+        # Spend elixir
+        if not self.elixir_system.spend(player_id, cost):
+            return  # silently fail
+
+        # Play card (cycle hand)
+        player.play_card(card_idx)
+
+        # Flip y for player 1 (player 1's "own side" is top of the map)
+        actual_x = float(tile_x)
+        actual_y = float(tile_y) if player_id == 0 else float(N_HEIGHT_TILES - 1 - tile_y)
+
+        is_spell = CARD_STATS[card_name].get("is_spell", False)
+        if is_spell:
+            self.arena.apply_spell(card_name, player_id, actual_x, actual_y)
+        else:
+            self.arena.spawn_troop(card_name, player_id, actual_x, actual_y)
+
+    # ── game over ─────────────────────────────────────────────────────────
+
+    def _check_game_over(self) -> None:
+        """Check win conditions: king tower destroyed or time up."""
+        # King tower destruction → immediate win
+        for pid in (0, 1):
+            king = self.arena.king_tower(pid)
+            if king is None or king.is_dead:
+                self._done = True
+                self._winner = 1 - pid
+                return
+
+        # Time up
+        if self.scheduler.is_time_up:
+            self._done = True
+            self._winner = self._determine_winner_by_crowns()
+            return
+
+    def _determine_winner_by_crowns(self) -> Optional[int]:
+        """Count destroyed princess towers (crowns). Most crowns wins."""
+        crowns = [0, 0]
+        for pid in (0, 1):
+            opponent = 1 - pid
+            for side in ("left_princess", "right_princess"):
+                if self.arena.tower_hp(opponent, side) <= 0:
+                    crowns[pid] += 1
+            if self.arena.tower_hp(opponent, "king") <= 0:
+                crowns[pid] += 3
+
+        if crowns[0] > crowns[1]:
+            return 0
+        elif crowns[1] > crowns[0]:
+            return 1
+
+        # Tiebreaker: total HP difference on remaining towers
+        hp0 = sum(
+            self.arena.tower_hp(0, t) for t in ("left_princess", "right_princess", "king")
+        )
+        hp1 = sum(
+            self.arena.tower_hp(1, t) for t in ("left_princess", "right_princess", "king")
+        )
+        if hp0 > hp1:
+            return 0
+        elif hp1 > hp0:
+            return 1
+
+        return None  # true draw
+
+    def _check_king_activation(self) -> None:
+        """Activate king tower if an enemy troop crosses the bridge."""
+        for pid in (0, 1):
+            king = self.arena.king_tower(pid)
+            if king is None or king.is_active:
+                continue
+            enemy_id = 1 - pid
+            for e in self.arena.get_entities_for_player(enemy_id):
+                if e.is_building or e.is_dead:
+                    continue
+                # Player 0's bridge crossing: enemy (pid=1) at y < BRIDGE_Y
+                if pid == 0 and e.y < BRIDGE_Y:
+                    king.activate()
+                    break
+                if pid == 1 and e.y > BRIDGE_Y:
+                    king.activate()
+                    break
+
+    # ── state building ────────────────────────────────────────────────────
+
+    def _get_state(self, player_id: int) -> State:
+        """Build a :class:`State` from the perspective of *player_id*."""
+        opponent_id = 1 - player_id
+        player = self.players[player_id]
+        elixir = self.elixir_system.get(player_id)
+
+        allies = self._detections_for(player_id)
+        enemies = self._detections_for(opponent_id)
+
+        # Tower HPs — from player's perspective
+        numbers = Numbers(
+            elixir=elixir,
+            enemy_elixir=self.elixir_system.get(opponent_id),
+            left_princess_hp=self.arena.tower_hp(player_id, "left_princess"),
+            right_princess_hp=self.arena.tower_hp(player_id, "right_princess"),
+            king_hp=self.arena.tower_hp(player_id, "king"),
+            left_enemy_princess_hp=self.arena.tower_hp(opponent_id, "left_princess"),
+            right_enemy_princess_hp=self.arena.tower_hp(opponent_id, "right_princess"),
+            enemy_king_hp=self.arena.tower_hp(opponent_id, "king"),
+            time_remaining=self.scheduler.time_remaining,
+        )
+
+        # Cards
+        cards_tuple = self._build_cards(player)
+        ready = player.playable_indices(elixir)
+
+        return State(
+            allies=allies,
+            enemies=enemies,
+            numbers=numbers,
+            cards=cards_tuple,
+            ready=ready,
+        )
+
+    def _detections_for(self, player_id: int) -> List[UnitDetection]:
+        detections: List[UnitDetection] = []
+        for e in self.arena.get_entities_for_player(player_id):
+            px, py = tile_to_pixel(e.x, e.y)
+            half_w = int(e.hitbox_radius * TILE_WIDTH)
+            half_h = int(e.hitbox_radius * TILE_HEIGHT)
+            bbox = (
+                max(0, int(px) - half_w),
+                max(0, int(py) - half_h),
+                min(DISPLAY_WIDTH, int(px) + half_w),
+                min(DISPLAY_HEIGHT, int(py) + half_h),
+            )
+            pos = Position(bbox=bbox, conf=1.0, tile_x=e.tile_x, tile_y=e.tile_y)
+            unit = Unit(
+                name=e.name,
+                category="building" if e.is_building else "troop",
+                target=e.target_type,
+                transport=e.transport,
+            )
+            detections.append(UnitDetection(unit=unit, position=pos))
+        return detections
+
+    @staticmethod
+    def _build_cards(player: Player) -> Tuple[Card, Card, Card, Card]:
+        cards: List[Card] = []
+        for name in player.hand:
+            stats = CARD_STATS[name]
+            is_spell = stats.get("is_spell", False)
+            cost = stats["elixir"]
+            unit = Unit(
+                name=name,
+                category="spell" if is_spell else "troop",
+                target=stats.get("target", "all"),
+                transport=stats.get("transport", "ground"),
+            )
+            cards.append(Card(name=name, is_spell=is_spell, cost=cost, units=[unit]))
+        # Ensure exactly 4
+        while len(cards) < 4:
+            cards.append(Card(name="empty", is_spell=False, cost=0, units=[]))
+        return (cards[0], cards[1], cards[2], cards[3])
+
+    # ── tower HP snapshot ─────────────────────────────────────────────────
+
+    def _snapshot_tower_hp(self) -> None:
+        self._prev_tower_hp = {}
+        for pid in (0, 1):
+            for t in ("left_princess", "right_princess", "king"):
+                self._prev_tower_hp[f"p{pid}_{t}"] = self.arena.tower_hp(pid, t)
+
+    def get_tower_damage_delta(self, player_id: int) -> float:
+        """
+        Return total HP lost by *opponent*'s towers since last snapshot.
+        Positive = player dealt damage.
+        """
+        opponent_id = 1 - player_id
+        delta = 0.0
+        for t in ("left_princess", "right_princess", "king"):
+            key = f"p{opponent_id}_{t}"
+            prev = self._prev_tower_hp.get(key, 0.0)
+            curr = self.arena.tower_hp(opponent_id, t)
+            if prev > curr:
+                delta += prev - curr
+        return delta
+
+    def get_tower_loss_delta(self, player_id: int) -> float:
+        """HP lost by *own* towers since last snapshot (positive = bad)."""
+        delta = 0.0
+        for t in ("left_princess", "right_princess", "king"):
+            key = f"p{player_id}_{t}"
+            prev = self._prev_tower_hp.get(key, 0.0)
+            curr = self.arena.tower_hp(player_id, t)
+            if prev > curr:
+                delta += prev - curr
+        return delta
+
+    def count_towers_destroyed(self, player_id: int) -> int:
+        """Return how many of the **opponent's** towers player has destroyed."""
+        opponent_id = 1 - player_id
+        count = 0
+        for t in ("left_princess", "right_princess", "king"):
+            if self.arena.tower_hp(opponent_id, t) <= 0:
+                count += 1
+        return count
