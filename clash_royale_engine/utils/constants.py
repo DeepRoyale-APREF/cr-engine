@@ -52,6 +52,13 @@ RIVER_Y_MIN: float = 15.0   # bottom edge of river (== BRIDGE_Y)
 RIVER_Y_MAX: float = 17.0   # top edge of river (2 tiles deep)
 BRIDGE_WIDTH: float = 2.0   # each bridge spans 2 tiles in x
 
+# ────────────────────────────── POCKET PLACEMENT ───────────────────────────────
+# When an enemy princess tower is destroyed, the attacker may deploy troops in
+# a *pocket* on the enemy's side.  The pocket extends POCKET_DEPTH tiles past
+# the river into enemy territory.  Left / right lane are separated at the centre.
+POCKET_DEPTH: int = 3
+LANE_DIVIDER_X: int = N_WIDE_TILES // 2  # tile_x < 9 = left lane, >= 9 = right
+
 # ────────────────────────────── TOWER CONFIGURATIONS ───────────────────────────
 PRINCESS_TOWER_STATS: Dict[str, Any] = {
     "name": "princess_tower",
