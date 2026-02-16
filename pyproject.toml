@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clash-royale-engine"
+version = "0.1.0"
+description = "High-performance Clash Royale Arena 1 simulation engine for RL training"
+authors = [
+    { name = "Fabrizio Montoya" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+dependencies = [
+    "numpy>=1.26",
+    "gymnasium>=1.0",
+]
+
+[project.optional-dependencies]
+
+rl = [
+    "stable-baselines3>=2.3",
+    "torch",
+]
+
+dev = [
+    "pytest>=8.0",
+    "mypy>=1.8",
+    "black>=24.0",
+    "isort>=5.13",
+    "ruff>=0.5"
+]
+
+render = [
+    "pygame>=2.6"
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
