@@ -247,11 +247,13 @@ class TestPhysics:
     def test_movement_speed_giant(self) -> None:
         """Giant moves at ~45 px/s = SPEED_SLOW tiles/s."""
         reset_entity_id_counter()
-        giant = create_giant(0, 9.0, 5.0)
+        # Place on own side — target also on own side so river routing
+        # does not interfere with the pure-speed assertion.
+        giant = create_giant(0, 9.0, 2.0)
         giant.is_deployed = True
-        # Give it a target far ahead
+        # Target on same side of river (y=12 < RIVER_Y_MIN=15)
         target = Entity(
-            name="dummy", player_id=1, x=9.0, y=30.0,
+            name="dummy", player_id=1, x=9.0, y=12.0,
             hp=9999, damage=0, hit_speed=99, attack_range=0,
             sight_range=99, speed=0, target_type="all",
             is_building=True,
@@ -287,6 +289,92 @@ class TestPhysics:
 
         dist = ((e1.x - e2.x) ** 2 + (e1.y - e2.y) ** 2) ** 0.5
         assert dist > 0.1, "Entities should have separated"
+
+    def test_river_blocks_ground_troops(self) -> None:
+        """Ground troops cannot enter the river zone at non-bridge positions."""
+        from clash_royale_engine.systems.physics import PhysicsEngine, _is_on_bridge
+        from clash_royale_engine.utils.constants import RIVER_Y_MIN, RIVER_Y_MAX
+
+        enforce = PhysicsEngine._enforce_river
+
+        # Below river → into river, NOT on bridge → blocked
+        assert enforce(14.0, 9.0, 15.5) < RIVER_Y_MIN
+        # Above river → into river, NOT on bridge → blocked
+        assert enforce(18.0, 9.0, 16.0) > RIVER_Y_MAX
+        # Below river → jump OVER river, NOT on bridge → blocked
+        assert enforce(14.0, 9.0, 18.0) < RIVER_Y_MIN
+        # On bridge (x=4.0 is left bridge) → allowed
+        assert enforce(14.0, 4.0, 15.5) == 15.5
+
+        # Simulation invariant: if a troop is in the river zone, it must be
+        # standing on a bridge tile.
+        reset_entity_id_counter()
+        giant = create_giant(0, 9.0, 5.0)
+        giant.is_deployed = True
+        target = Entity(
+            name="dummy", player_id=1, x=9.0, y=25.0,
+            hp=9999, damage=0, hit_speed=99, attack_range=0,
+            sight_range=99, speed=0, target_type="all",
+            is_building=True,
+        )
+        giant.current_target = target
+
+        physics = PhysicsEngine(fps=DEFAULT_FPS)
+        for _ in range(600):
+            physics.update([giant])
+            if RIVER_Y_MIN <= giant.y <= RIVER_Y_MAX:
+                assert _is_on_bridge(giant.x), (
+                    f"Ground troop in river at ({giant.x:.2f}, {giant.y:.2f}) "
+                    f"which is NOT a bridge tile!"
+                )
+
+    def test_bridge_allows_crossing(self) -> None:
+        """Ground troops CAN cross the river when on a bridge tile."""
+        from clash_royale_engine.utils.constants import BRIDGE_LEFT_X, BRIDGE_WIDTH, RIVER_Y_MAX
+
+        reset_entity_id_counter()
+        bridge_cx = BRIDGE_LEFT_X + BRIDGE_WIDTH / 2.0  # centre of left bridge
+        giant = create_giant(0, bridge_cx, 10.0)
+        giant.is_deployed = True
+        target = Entity(
+            name="dummy", player_id=1, x=bridge_cx, y=25.0,
+            hp=9999, damage=0, hit_speed=99, attack_range=0,
+            sight_range=99, speed=0, target_type="all",
+            is_building=True,
+        )
+        giant.current_target = target
+
+        physics = PhysicsEngine(fps=DEFAULT_FPS)
+        for _ in range(600):  # 20 seconds
+            physics.update([giant])
+
+        assert giant.y > RIVER_Y_MAX, (
+            f"Giant should have crossed the river via bridge, but y={giant.y:.2f}"
+        )
+
+    def test_river_routing_reaches_other_side(self) -> None:
+        """A ground troop placed off-bridge still reaches the enemy side
+        by routing through the nearest bridge."""
+        from clash_royale_engine.utils.constants import RIVER_Y_MAX
+
+        reset_entity_id_counter()
+        giant = create_giant(0, 9.0, 5.0)  # off-bridge
+        giant.is_deployed = True
+        target = Entity(
+            name="dummy", player_id=1, x=9.0, y=28.0,
+            hp=9999, damage=0, hit_speed=99, attack_range=0,
+            sight_range=99, speed=0, target_type="all",
+            is_building=True,
+        )
+        giant.current_target = target
+
+        physics = PhysicsEngine(fps=DEFAULT_FPS)
+        for _ in range(900):  # 30 seconds — enough for slow giant
+            physics.update([giant])
+
+        assert giant.y > RIVER_Y_MAX, (
+            f"Giant should have routed through bridge and crossed, but y={giant.y:.2f}"
+        )
 
 
 class TestCoordinateConversion:
