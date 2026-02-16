@@ -39,6 +39,7 @@ from clash_royale_engine.players.player_interface import RLAgentPlayer
 from clash_royale_engine.systems.elixir import ElixirSystem
 from clash_royale_engine.systems.physics import PhysicsEngine
 from clash_royale_engine.utils.constants import (
+    BRIDGE_Y,
     DEFAULT_FPS,
     LANE_DIVIDER_X,
     MAX_ELIXIR,
@@ -377,25 +378,26 @@ class TestPocketPlacement:
     # ── Player 1 symmetric tests ──────────────────────────────────────────
 
     def test_p1_enemy_side_blocked(self) -> None:
-        """Player 1 cannot place troops on P0's side (low y) without tower kill."""
+        """Player 1 cannot place troops on enemy side (high y from P1 perspective)."""
         p1 = Player(1, ["giant", "musketeer", "archers", "mini_pekka",
                         "knight", "skeletons", "arrows", "fireball"], seed=0)
         p1.elixir = 10.0
-        tile_y_p0_side = int(RIVER_Y_MIN) - 1  # 14 — P0's territory
+        # From P1's perspective, enemy side is tile_y >= BRIDGE_Y (15)
+        tile_y_enemy_side = int(BRIDGE_Y)  # 15 — enemy territory from P1's view
         err = validate_placement(
-            1, 5, tile_y_p0_side, "knight", p1,
+            1, 5, tile_y_enemy_side, "knight", p1,
             enemy_left_princess_dead=False,
             enemy_right_princess_dead=False,
         )
         assert err is not None
 
     def test_p1_left_pocket_unlocked(self) -> None:
-        """Player 1 can place in left pocket on P0's side after P0's left tower dies."""
+        """Player 1 can place in left pocket after enemy left tower dies."""
         p1 = Player(1, ["giant", "musketeer", "archers", "mini_pekka",
                         "knight", "skeletons", "arrows", "fireball"], seed=0)
         p1.elixir = 10.0
-        # P1 pocket is below river: y from RIVER_Y_MIN - POCKET_DEPTH to RIVER_Y_MIN - 1
-        pocket_y = int(RIVER_Y_MIN) - 1  # 14
+        # From P1's perspective, pocket is past the river: y from RIVER_Y_MAX to RIVER_Y_MAX + POCKET_DEPTH - 1
+        pocket_y = int(RIVER_Y_MAX)  # 17 — just past river from P1's view
         pocket_x = 4  # left lane (< 9)
         err = validate_placement(
             1, pocket_x, pocket_y, "knight", p1,

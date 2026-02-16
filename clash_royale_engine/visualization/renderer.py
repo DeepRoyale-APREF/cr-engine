@@ -76,11 +76,15 @@ ARENA_W = ARENA_TILES_W * CELL_SIZE  # 396
 ARENA_H = ARENA_TILES_H * CELL_SIZE  # 704
 
 MARGIN_TOP = 50  # space for timer header
+ARENA_PAD_Y = 35  # extra vertical padding so top-tile HP bars aren't hidden
 MARGIN_BOTTOM = 160  # space for HUD (cards + elixir)
 MARGIN_SIDE = 20
 
+# Total visual height of the arena area (grid + top padding)
+ARENA_VISUAL_H = ARENA_H + ARENA_PAD_Y
+
 WIN_W = ARENA_W + 2 * MARGIN_SIDE
-WIN_H = MARGIN_TOP + ARENA_H + MARGIN_BOTTOM
+WIN_H = MARGIN_TOP + ARENA_VISUAL_H + MARGIN_BOTTOM
 
 # River row(s) — visual only
 RIVER_Y_TILE = 15  # boundary between halves (same as BRIDGE_Y)
@@ -97,10 +101,12 @@ def _tile_to_screen(tile_x: float, tile_y: float) -> Tuple[int, int]:
 
     tile_y=0 is the BOTTOM of the arena (player 0 king).
     On screen y=0 is top, so we flip vertically.
+    ``ARENA_PAD_Y`` pushes the tile grid down so HP bars above the
+    topmost tiles are not hidden by the header HUD.
     """
     sx = MARGIN_SIDE + int(tile_x * CELL_SIZE) + CELL_SIZE // 2
     # Flip: tile_y 0 → bottom of arena on screen
-    sy = MARGIN_TOP + ARENA_H - int(tile_y * CELL_SIZE) - CELL_SIZE // 2
+    sy = MARGIN_TOP + ARENA_PAD_Y + ARENA_H - int(tile_y * CELL_SIZE) - CELL_SIZE // 2
     return sx, sy
 
 
@@ -234,22 +240,23 @@ class Renderer:
 
     def _draw_arena(self) -> None:
         pg = _ensure_pygame()
-        # Arena background
-        arena_rect = pg.Rect(MARGIN_SIDE, MARGIN_TOP, ARENA_W, ARENA_H)
+        # Arena background (includes the top padding band)
+        arena_rect = pg.Rect(MARGIN_SIDE, MARGIN_TOP, ARENA_W, ARENA_VISUAL_H)
         pg.draw.rect(self._screen, COL_BG, arena_rect)
 
-        # Grid lines
+        # Grid lines — shifted down by ARENA_PAD_Y
+        grid_top = MARGIN_TOP + ARENA_PAD_Y
         for tx in range(ARENA_TILES_W + 1):
             x = MARGIN_SIDE + tx * CELL_SIZE
-            pg.draw.line(self._screen, COL_GRID, (x, MARGIN_TOP), (x, MARGIN_TOP + ARENA_H))
+            pg.draw.line(self._screen, COL_GRID, (x, grid_top), (x, grid_top + ARENA_H))
         for ty in range(ARENA_TILES_H + 1):
-            y = MARGIN_TOP + ty * CELL_SIZE
+            y = grid_top + ty * CELL_SIZE
             pg.draw.line(self._screen, COL_GRID, (MARGIN_SIDE, y), (MARGIN_SIDE + ARENA_W, y))
 
     def _draw_river_and_bridges(self) -> None:
         pg = _ensure_pygame()
         # River band (2 tile rows around RIVER_Y_TILE)
-        river_screen_y = MARGIN_TOP + ARENA_H - (RIVER_Y_TILE + 1) * CELL_SIZE
+        river_screen_y = MARGIN_TOP + ARENA_PAD_Y + ARENA_H - (RIVER_Y_TILE + 1) * CELL_SIZE
         river_rect = pg.Rect(MARGIN_SIDE, river_screen_y, ARENA_W, CELL_SIZE * 2)
         pg.draw.rect(self._screen, COL_RIVER, river_rect)
 
@@ -307,6 +314,23 @@ class Renderer:
                     self._font_sm, COL_TEXT, shadow=False, center=True,
                 )
 
+                # ── Troop HP bar (above the circle) ──
+                if det.max_hp > 0:
+                    bar_w, bar_h = 20, 3
+                    bx = sx - bar_w // 2
+                    by = sy - radius - bar_h - 2
+                    # Background
+                    pg.draw.rect(self._screen, COL_HP_BAR_BG, (bx, by, bar_w, bar_h))
+                    # Fill
+                    ratio = max(0.0, min(1.0, det.hp / det.max_hp))
+                    fill_w = int(bar_w * ratio)
+                    hp_col = (80, 220, 80) if ratio > 0.5 else (
+                        (220, 200, 50) if ratio > 0.25 else (220, 50, 50)
+                    )
+                    if fill_w > 0:
+                        pg.draw.rect(self._screen, hp_col, (bx, by, fill_w, bar_h))
+                    pg.draw.rect(self._screen, (180, 180, 180), (bx, by, bar_w, bar_h), 1)
+
     # ── tower HP bars ─────────────────────────────────────────────────────
 
     def _draw_tower_hp(self, state: "State") -> None:
@@ -347,6 +371,20 @@ class Renderer:
             _draw_text(
                 self._screen, hp_text, (sx, by - 12),
                 self._font_sm, col, shadow=True, center=True,
+            )
+
+        # ── King tower active / inactive indicators ──
+        king_towers = [
+            (8.5, 0.5, state.numbers.king_active, COL_ALLY),
+            (8.5, 31.0, state.numbers.enemy_king_active, COL_ENEMY),
+        ]
+        for tx, ty, is_active, col in king_towers:
+            sx, sy = _tile_to_screen(tx, ty)
+            label = "ACTIVE" if is_active else "zzz"
+            label_col = (255, 80, 80) if is_active else (140, 140, 140)
+            _draw_text(
+                self._screen, label, (sx, sy + int(CELL_SIZE * 1.0)),
+                self._font_sm, label_col, shadow=True, center=True,
             )
 
     # ── top HUD (timer, crowns) ──────────────────────────────────────────
@@ -412,7 +450,7 @@ class Renderer:
 
     def _draw_bottom_hud(self, state: "State") -> None:
         pg = _ensure_pygame()
-        hud_y = MARGIN_TOP + ARENA_H
+        hud_y = MARGIN_TOP + ARENA_VISUAL_H
 
         # Background
         hud_rect = pg.Rect(0, hud_y, WIN_W, MARGIN_BOTTOM)
