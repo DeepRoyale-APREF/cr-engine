@@ -2,7 +2,7 @@
 
 Motor de simulación headless de Clash Royale (Arena 1) optimizado para entrenamiento masivo de agentes de Reinforcement Learning.
 
-Implementa 8 cartas específicas con física continua realista, sistema de combate con proyectiles, targeting oficial y una interfaz Gymnasium completa.
+Implementa 8 cartas específicas con física continua realista, sistema de combate con proyectiles, targeting oficial, interfaz Gymnasium completa, sistema de grabación y extracción de episodios para Imitation Learning, fog-of-war, pocket placement (colocación en lado enemigo tras destruir torres), y visualización GUI con Pygame.
 
 ---
 
@@ -15,6 +15,11 @@ Implementa 8 cartas específicas con física continua realista, sistema de comba
 - [Cartas Implementadas](#cartas-implementadas)
 - [Arquitectura del Motor](#arquitectura-del-motor)
 - [Entorno Gymnasium](#entorno-gymnasium)
+- [Fog-of-War](#fog-of-war)
+- [Pocket Placement](#pocket-placement)
+- [Grabación y Extracción de Episodios (IL)](#grabación-y-extracción-de-episodios-il)
+- [Visualización GUI](#visualización-gui)
+- [Ejemplos](#ejemplos)
 - [Entrenamiento con Stable-Baselines3](#entrenamiento-con-stable-baselines3)
 - [Testing](#testing)
 - [Compatibilidad con Google Colab](#compatibilidad-con-google-colab)
@@ -201,6 +206,7 @@ cr-engine/
 │   ├── core/
 │   │   ├── engine.py            # ClashRoyaleEngine — orquestador principal
 │   │   ├── arena.py             # Contenedor de entidades, spawn de tropas/hechizos
+│   │   ├── recorder.py          # Grabación de partidas y extracción de episodios IL
 │   │   ├── scheduler.py         # Reloj de simulación, detección de overtime
 │   │   └── state.py             # Dataclasses del estado (compatible BuildABot)
 │   ├── entities/
@@ -222,22 +228,30 @@ cr-engine/
 │   │   ├── physics.py           # Movimiento continuo, colisiones circulares
 │   │   ├── combat.py            # Ataques, proyectiles, aplicación de daño
 │   │   ├── targeting.py         # Selección de objetivos (lógica oficial CR)
-│   │   ├── pathfinding.py       # Navegación por puentes
+│   │   ├── pathfinding.py       # Navegación por puentes, restricción de río
 │   │   └── elixir.py            # Generación y gasto de elixir
 │   ├── players/
 │   │   ├── player.py            # Deck, mano, ciclado de cartas
 │   │   └── player_interface.py  # Interfaz abstracta + HeuristicBot, RLAgentPlayer
 │   ├── env/
-│   │   ├── gymnasium_env.py     # ClashRoyaleEnv (wrapper Gymnasium)
+│   │   ├── gymnasium_env.py     # ClashRoyaleEnv (wrapper Gymnasium, fog-of-war, recording)
 │   │   └── multi_agent_env.py   # MultiAgentEnv + VectorizedEnv
 │   ├── utils/
 │   │   ├── constants.py         # Constantes del juego (stats, coordenadas, velocidades)
 │   │   ├── converters.py        # Conversiones tile ↔ pixel (BuildABot-compatible)
-│   │   └── validators.py        # Validación de acciones y colocaciones
+│   │   └── validators.py        # Validación de acciones, pocket placement
 │   └── visualization/
-│       └── renderer.py          # Placeholder para GUI (Fase 2)
+│       └── renderer.py          # Visualización GUI con Pygame
+├── examples/
+│   ├── 01_headless_quickstart.py   # Partida headless bot vs bot
+│   ├── 02_gymnasium_random_agent.py # Gymnasium con agente aleatorio
+│   ├── 03_recording_and_il.py      # Grabación + 4 episodios IL por simetría
+│   ├── 04_manual_placement.py      # Colocación manual de cartas
+│   ├── 05_pocket_placement.py      # Demo pocket placement (carriles/torres)
+│   ├── 06_state_inspection.py      # Inspección de estado y fog-of-war
+│   └── demo_gui.py                 # Demo de visualización GUI con Pygame
 ├── tests/
-│   └── test_engine.py           # 28 tests (motor, física, combate, gym interface)
+│   └── test_engine.py           # 69 tests (motor, física, combate, gym, IL, fog, pocket)
 ├── environment.yaml             # Entorno Mamba con PyTorch + CUDA
 ├── pyproject.toml               # Configuración del paquete y herramientas
 └── AGENTS.md                    # Especificación completa del motor
@@ -333,16 +347,17 @@ cr-engine/
 
 ### Espacio de Observaciones
 
-`Box(0, 1, shape=(2348,), float32)`:
+`Box(0, 1, shape=(1196,), float32)`:
 
 | Segmento | Dimensiones | Descripción |
 |---|---|---|
 | Elixir | 2 | Propio + enemigo (normalizado /10) |
 | Torres HP | 6 | 3 propias + 3 enemigas (normalizado) |
-| Cartas en mano | 36 | 4 × (one-hot 8 cartas + costo) |
+| Cartas en mano | 36 | 4 × (one-hot 8 cartas + costo normalizado) |
 | Grid aliados | 576 | 32 × 18 occupancy map |
 | Grid enemigos | 576 | 32 × 18 occupancy map |
-| Padding | ~1152 | Reservado para extensiones futuras |
+
+> Con `fog_of_war=True` (por defecto), el elixir enemigo (índice 1) se fija a 0.
 
 ### Reward Shaping
 
@@ -350,6 +365,134 @@ cr-engine/
 |---|---|
 | `"sparse"` | +1 victoria, −1 derrota, 0 empate (solo al final) |
 | `"dense"` | Rewards intermedios: daño a torres (+), torres perdidas (−), acción inválida (−0.1), victoria (+10), derrota (−10) |
+
+---
+
+## Fog-of-War
+
+El entorno soporta **fog-of-war** (`fog_of_war=True` por defecto) que oculta información privilegiada del oponente:
+
+- El **elixir enemigo** se reporta como 0 en la observación.
+- Todas las unidades enemigas visibles en el campo siguen siendo observables (no hay fog espacial).
+
+```python
+# Observación con información perfecta
+env_god = ClashRoyaleEnv(fog_of_war=False)
+
+# Observación parcial (por defecto, recomendado para entrenamiento)
+env_fog = ClashRoyaleEnv(fog_of_war=True)
+```
+
+---
+
+## Pocket Placement
+
+Implementa la regla oficial de Clash Royale para colocación en el lado enemigo:
+
+| Regla | Descripción |
+|---|---|
+| **Tropas en lado propio** | Siempre permitido |
+| **Tropas en lado enemigo** | Bloqueado por defecto |
+| **Hechizos** | Se pueden lanzar en cualquier parte del mapa |
+| **Pocket izquierdo** | Se desbloquea al destruir la torre princesa izquierda enemiga |
+| **Pocket derecho** | Se desbloquea al destruir la torre princesa derecha enemiga |
+
+El **pocket** es un área de `POCKET_DEPTH=3` tiles de profundidad pasando el río, restringida al carril cuya torre princesa fue destruida:
+
+- **Carril izquierdo:** `tile_x < 9`
+- **Carril derecho:** `tile_x >= 9`
+- **Profundidad P0:** `y = 17..19` (atacando hacia arriba)
+- **Profundidad P1:** `y = 12..14` (atacando hacia abajo)
+
+---
+
+## Grabación y Extracción de Episodios (IL)
+
+El sistema de **recording** permite grabar partidas completas y extraer episodios para **Imitation Learning**:
+
+### Grabar una partida
+
+```python
+env = ClashRoyaleEnv(record=True, fog_of_war=True)
+obs, info = env.reset()
+
+# ... jugar episodio completo ...
+
+env.reset()  # finaliza la grabación
+record = env.get_game_record()
+```
+
+### Extraer 4 episodios por simetría
+
+De cada partida grabada se generan **4 trayectorias** de entrenamiento:
+
+| Episodio | Transformación | Propósito |
+|---|---|---|
+| P0 original | Ninguna | Trayectoria directa del jugador 0 |
+| P1 y-flip | Volteo vertical | Normaliza perspectiva de P1 al fondo del mapa |
+| P0 x-flip | Espejo horizontal | Data augmentation |
+| P1 y+x-flip | Ambas | Combinación de normalización + augmentation |
+
+```python
+episodes = env.extract_il_episodes(record)  # Lista de 4 episodios
+
+# Convertir a numpy batch
+from clash_royale_engine.core.recorder import EpisodeExtractor
+batch = EpisodeExtractor.episodes_to_numpy(episodes)
+# batch["states"].shape     → (N, 1196)
+# batch["actions"].shape    → (N,)
+# batch["rewards"].shape    → (N,)
+# batch["next_states"].shape → (N, 1196)
+# batch["dones"].shape      → (N,)
+```
+
+---
+
+## Visualización GUI
+
+El motor incluye una GUI de visualización en tiempo real con **Pygame**:
+
+```bash
+python examples/demo_gui.py
+```
+
+Características:
+- Renderizado de la arena 18×32 con tiles de color
+- Torres (princesa y rey) con barras de HP
+- Tropas con colores por tipo y bandos diferenciados
+- Proyectiles en vuelo
+- Barra de elixir en tiempo real
+- Río y puentes
+- Panel de información (frame, tiempo, elixir)
+
+> Requiere `pygame` instalado (`pip install pygame`).
+
+---
+
+## Ejemplos
+
+La carpeta `examples/` contiene scripts listos para ejecutar:
+
+| Archivo | Descripción |
+|---|---|
+| `01_headless_quickstart.py` | Partida bot vs bot sin GUI, muestra estado cada 5s |
+| `02_gymnasium_random_agent.py` | Entorno Gymnasium con agente aleatorio, sparse vs dense |
+| `03_recording_and_il.py` | Grabación de partida + extracción de 4 episodios IL |
+| `04_manual_placement.py` | Colocación manual de cartas con `step_with_action` |
+| `05_pocket_placement.py` | Demo completo de pocket placement (carriles, torres, reglas) |
+| `06_state_inspection.py` | Inspección del feature vector, fog-of-war, estructura interna |
+| `demo_gui.py` | Visualización GUI con Pygame |
+
+```bash
+# Ejecutar cualquier ejemplo
+python examples/01_headless_quickstart.py
+python examples/02_gymnasium_random_agent.py
+python examples/03_recording_and_il.py
+python examples/04_manual_placement.py
+python examples/05_pocket_placement.py
+python examples/06_state_inspection.py
+python examples/demo_gui.py  # requiere pygame
+```
 
 ---
 
@@ -392,7 +535,7 @@ python -m pytest tests/ -v -k "not benchmark"
 python -m pytest tests/ --cov=clash_royale_engine --cov-report=term-missing
 ```
 
-Los 28 tests cubren:
+Los **69 tests** cubren:
 - Inicialización y reset del motor
 - Generación, cap y gasto de elixir
 - Spawn de cartas (×1, ×2, ×3 según la carta)
@@ -401,8 +544,15 @@ Los 28 tests cubren:
 - Validación de acciones (bounds, lado enemigo, elixir)
 - Física (velocidades, separación por colisión)
 - Conversión de coordenadas tile ↔ pixel
+- Restricción de río (tropas no cruzan, hechizos sí)
 - Interfaz Gymnasium completa (obs/action spaces, no-op, terminación, rewards)
 - Ambiente vectorizado
+- **Fog-of-war** (ocultación de elixir enemigo)
+- **Action encoding/decoding** (codificación bidireccional de acciones)
+- **State transforms** (y-flip, x-flip para normalización de perspectiva)
+- **Recording** (grabación de frames, transiciones, GameRecord)
+- **Extracción de IL** (4 episodios por simetría, conversión a numpy)
+- **Pocket placement** (13 tests: restricción de lado, desbloqueo por torre, carriles, profundidad, hechizos libres, ambos jugadores)
 - Benchmark de rendimiento (~2800 ep/hora)
 
 ---
