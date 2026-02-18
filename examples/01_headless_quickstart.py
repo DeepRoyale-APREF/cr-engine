@@ -31,7 +31,7 @@ def main() -> None:
         player1=bot1,
         player2=bot2,
         fps=30,
-        time_limit=180.0,      # 3 minutos
+        time_limit=180.0,  # 3 minutos
         speed_multiplier=1.0,
     )
 
@@ -48,7 +48,7 @@ def main() -> None:
 
         # Imprimir resumen cada 5 segundos de juego (150 frames)
         if step % 150 == 0:
-            n = state_p0.numbers
+            n = state_p0.numbes
             game_time = 180.0 - n.time_remaining
             print(
                 f"  [{game_time:5.1f}s]  "

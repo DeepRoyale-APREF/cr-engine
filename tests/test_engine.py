@@ -63,6 +63,7 @@ from clash_royale_engine.utils.validators import (
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def _make_engine(**kwargs) -> ClashRoyaleEngine:
     """Create engine with two dummy RL players."""
     return ClashRoyaleEngine(
@@ -267,10 +268,22 @@ class TestPocketPlacement:
     @pytest.fixture()
     def _fresh_player(self) -> Player:
         """Player with full elixir and hand containing at least a troop + spell."""
-        p = Player(0, list([
-            "giant", "musketeer", "archers", "mini_pekka",
-            "knight", "skeletons", "arrows", "fireball",
-        ]), seed=0)
+        p = Player(
+            0,
+            list(
+                [
+                    "giant",
+                    "musketeer",
+                    "archers",
+                    "mini_pekka",
+                    "knight",
+                    "skeletons",
+                    "arrows",
+                    "fireball",
+                ]
+            ),
+            seed=0,
+        )
         p.elixir = 10.0
         return p
 
@@ -287,7 +300,11 @@ class TestPocketPlacement:
         """Troop on enemy side fails when both princess towers are alive."""
         tile_y_enemy = int(RIVER_Y_MAX)  # 17 — just past river, enemy side for P0
         err = validate_placement(
-            0, 5, tile_y_enemy, "giant", _fresh_player,
+            0,
+            5,
+            tile_y_enemy,
+            "giant",
+            _fresh_player,
             enemy_left_princess_dead=False,
             enemy_right_princess_dead=False,
         )
@@ -301,7 +318,11 @@ class TestPocketPlacement:
         # 'arrows' is at index 6 in the default deck
         # but validate_placement uses card_name directly
         err = validate_placement(
-            0, 9, 28, "arrows", _fresh_player,
+            0,
+            9,
+            28,
+            "arrows",
+            _fresh_player,
             enemy_left_princess_dead=False,
             enemy_right_princess_dead=False,
         )
@@ -310,7 +331,11 @@ class TestPocketPlacement:
     def test_fireball_on_enemy_side(self, _fresh_player: Player) -> None:
         """Fireball can land anywhere."""
         err = validate_placement(
-            0, 3, 25, "fireball", _fresh_player,
+            0,
+            3,
+            25,
+            "fireball",
+            _fresh_player,
             enemy_left_princess_dead=False,
             enemy_right_princess_dead=False,
         )
@@ -323,7 +348,11 @@ class TestPocketPlacement:
         pocket_y = int(RIVER_Y_MAX)  # 17 — first row of pocket past river
         pocket_x = LANE_DIVIDER_X - 1  # 8 — left lane
         err = validate_placement(
-            0, pocket_x, pocket_y, "giant", _fresh_player,
+            0,
+            pocket_x,
+            pocket_y,
+            "giant",
+            _fresh_player,
             enemy_left_princess_dead=True,
             enemy_right_princess_dead=False,
         )
@@ -334,7 +363,11 @@ class TestPocketPlacement:
         pocket_y = int(RIVER_Y_MAX)
         pocket_x = LANE_DIVIDER_X  # 9 — right lane
         err = validate_placement(
-            0, pocket_x, pocket_y, "giant", _fresh_player,
+            0,
+            pocket_x,
+            pocket_y,
+            "giant",
+            _fresh_player,
             enemy_left_princess_dead=True,
             enemy_right_princess_dead=False,
         )
@@ -347,7 +380,11 @@ class TestPocketPlacement:
         pocket_y = int(RIVER_Y_MAX)
         pocket_x = LANE_DIVIDER_X  # 9
         err = validate_placement(
-            0, pocket_x, pocket_y, "knight", _fresh_player,
+            0,
+            pocket_x,
+            pocket_y,
+            "knight",
+            _fresh_player,
             enemy_left_princess_dead=False,
             enemy_right_princess_dead=True,
         )
@@ -359,7 +396,11 @@ class TestPocketPlacement:
         """Troop cannot be placed deeper than POCKET_DEPTH past the river."""
         too_deep_y = int(RIVER_Y_MAX) + POCKET_DEPTH  # one tile beyond the pocket
         err = validate_placement(
-            0, 5, too_deep_y, "giant", _fresh_player,
+            0,
+            5,
+            too_deep_y,
+            "giant",
+            _fresh_player,
             enemy_left_princess_dead=True,
             enemy_right_princess_dead=True,
         )
@@ -369,7 +410,11 @@ class TestPocketPlacement:
         """Troop at the deepest pocket tile is still valid."""
         max_pocket_y = int(RIVER_Y_MAX) + POCKET_DEPTH - 1
         err = validate_placement(
-            0, 5, max_pocket_y, "giant", _fresh_player,
+            0,
+            5,
+            max_pocket_y,
+            "giant",
+            _fresh_player,
             enemy_left_princess_dead=True,
             enemy_right_princess_dead=False,
         )
@@ -379,13 +424,29 @@ class TestPocketPlacement:
 
     def test_p1_enemy_side_blocked(self) -> None:
         """Player 1 cannot place troops on enemy side (high y from P1 perspective)."""
-        p1 = Player(1, ["giant", "musketeer", "archers", "mini_pekka",
-                        "knight", "skeletons", "arrows", "fireball"], seed=0)
+        p1 = Player(
+            1,
+            [
+                "giant",
+                "musketeer",
+                "archers",
+                "mini_pekka",
+                "knight",
+                "skeletons",
+                "arrows",
+                "fireball",
+            ],
+            seed=0,
+        )
         p1.elixir = 10.0
         # From P1's perspective, enemy side is tile_y >= BRIDGE_Y (15)
         tile_y_enemy_side = int(BRIDGE_Y)  # 15 — enemy territory from P1's view
         err = validate_placement(
-            1, 5, tile_y_enemy_side, "knight", p1,
+            1,
+            5,
+            tile_y_enemy_side,
+            "knight",
+            p1,
             enemy_left_princess_dead=False,
             enemy_right_princess_dead=False,
         )
@@ -393,14 +454,31 @@ class TestPocketPlacement:
 
     def test_p1_left_pocket_unlocked(self) -> None:
         """Player 1 can place in left pocket after enemy left tower dies."""
-        p1 = Player(1, ["giant", "musketeer", "archers", "mini_pekka",
-                        "knight", "skeletons", "arrows", "fireball"], seed=0)
+        p1 = Player(
+            1,
+            [
+                "giant",
+                "musketeer",
+                "archers",
+                "mini_pekka",
+                "knight",
+                "skeletons",
+                "arrows",
+                "fireball",
+            ],
+            seed=0,
+        )
         p1.elixir = 10.0
-        # From P1's perspective, pocket is past the river: y from RIVER_Y_MAX to RIVER_Y_MAX + POCKET_DEPTH - 1
+        # From P1's perspective, pocket is past the river:
+        #  y from RIVER_Y_MAX to RIVER_Y_MAX + POCKET_DEPTH - 1
         pocket_y = int(RIVER_Y_MAX)  # 17 — just past river from P1's view
         pocket_x = 4  # left lane (< 9)
         err = validate_placement(
-            1, pocket_x, pocket_y, "knight", p1,
+            1,
+            pocket_x,
+            pocket_y,
+            "knight",
+            p1,
             enemy_left_princess_dead=True,
             enemy_right_princess_dead=False,
         )
@@ -459,9 +537,17 @@ class TestPhysics:
         giant.is_deployed = True
         # Target on same side of river (y=12 < RIVER_Y_MIN=15)
         target = Entity(
-            name="dummy", player_id=1, x=9.0, y=12.0,
-            hp=9999, damage=0, hit_speed=99, attack_range=0,
-            sight_range=99, speed=0, target_type="all",
+            name="dummy",
+            player_id=1,
+            x=9.0,
+            y=12.0,
+            hp=9999,
+            damage=0,
+            hit_speed=99,
+            attack_range=0,
+            sight_range=99,
+            speed=0,
+            target_type="all",
             is_building=True,
         )
         giant.current_target = target
@@ -476,7 +562,9 @@ class TestPhysics:
         dy = giant.y - y_before
         avg_tile = (TILE_WIDTH + TILE_HEIGHT) / 2.0
         expected_tiles = SPEED_SLOW / avg_tile  # tiles / second
-        assert abs(dy - expected_tiles) < 0.5, f"Giant moved {dy:.2f} tiles, expected ~{expected_tiles:.2f}"
+        assert abs(dy - expected_tiles) < 0.5, (
+            f"Giant moved {dy:.2f} tiles, expected ~{expected_tiles:.2f}"
+        )
 
     def test_collision_separation(self) -> None:
         """Two overlapping entities are pushed apart."""
@@ -499,7 +587,7 @@ class TestPhysics:
     def test_river_blocks_ground_troops(self) -> None:
         """Ground troops cannot enter the river zone at non-bridge positions."""
         from clash_royale_engine.systems.physics import PhysicsEngine, _is_on_bridge
-        from clash_royale_engine.utils.constants import RIVER_Y_MAX, RIVER_Y_MIN
+        from clash_royale_engine.utils.constants import RIVER_Y_MAX
 
         enforce = PhysicsEngine._enforce_river
 
@@ -518,9 +606,17 @@ class TestPhysics:
         giant = create_giant(0, 9.0, 5.0)
         giant.is_deployed = True
         target = Entity(
-            name="dummy", player_id=1, x=9.0, y=25.0,
-            hp=9999, damage=0, hit_speed=99, attack_range=0,
-            sight_range=99, speed=0, target_type="all",
+            name="dummy",
+            player_id=1,
+            x=9.0,
+            y=25.0,
+            hp=9999,
+            damage=0,
+            hit_speed=99,
+            attack_range=0,
+            sight_range=99,
+            speed=0,
+            target_type="all",
             is_building=True,
         )
         giant.current_target = target
@@ -543,9 +639,17 @@ class TestPhysics:
         giant = create_giant(0, bridge_cx, 10.0)
         giant.is_deployed = True
         target = Entity(
-            name="dummy", player_id=1, x=bridge_cx, y=25.0,
-            hp=9999, damage=0, hit_speed=99, attack_range=0,
-            sight_range=99, speed=0, target_type="all",
+            name="dummy",
+            player_id=1,
+            x=bridge_cx,
+            y=25.0,
+            hp=9999,
+            damage=0,
+            hit_speed=99,
+            attack_range=0,
+            sight_range=99,
+            speed=0,
+            target_type="all",
             is_building=True,
         )
         giant.current_target = target
@@ -567,9 +671,17 @@ class TestPhysics:
         giant = create_giant(0, 9.0, 5.0)  # off-bridge
         giant.is_deployed = True
         target = Entity(
-            name="dummy", player_id=1, x=9.0, y=28.0,
-            hp=9999, damage=0, hit_speed=99, attack_range=0,
-            sight_range=99, speed=0, target_type="all",
+            name="dummy",
+            player_id=1,
+            x=9.0,
+            y=28.0,
+            hp=9999,
+            damage=0,
+            hit_speed=99,
+            attack_range=0,
+            sight_range=99,
+            speed=0,
+            target_type="all",
             is_building=True,
         )
         giant.current_target = target
@@ -799,12 +911,10 @@ class TestStateTransforms:
         assert flipped.numbers.left_princess_hp == sample_state.numbers.right_princess_hp
         assert flipped.numbers.right_princess_hp == sample_state.numbers.left_princess_hp
         assert (
-            flipped.numbers.left_enemy_princess_hp
-            == sample_state.numbers.right_enemy_princess_hp
+            flipped.numbers.left_enemy_princess_hp == sample_state.numbers.right_enemy_princess_hp
         )
         assert (
-            flipped.numbers.right_enemy_princess_hp
-            == sample_state.numbers.left_enemy_princess_hp
+            flipped.numbers.right_enemy_princess_hp == sample_state.numbers.left_enemy_princess_hp
         )
 
     def test_double_flip_y_is_identity(self, sample_state: State) -> None:

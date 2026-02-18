@@ -50,8 +50,12 @@ def main() -> None:
     n = s0.numbers
     print(f"  Elixir propio:   {n.elixir:.2f}")
     print(f"  Elixir enemigo:  {n.enemy_elixir:.2f}  ← visible en god-view")
-    print(f"  Torres propias:  L={n.left_princess_hp:.0f}  R={n.right_princess_hp:.0f}  K={n.king_hp:.0f}")
-    print(f"  Torres enemigas: L={n.left_enemy_princess_hp:.0f}  R={n.right_enemy_princess_hp:.0f}  K={n.enemy_king_hp:.0f}")
+    print(
+        f"  Torres propias:  L={n.left_princess_hp:.0f}  R={n.right_princess_hp:.0f}  K={n.king_hp:.0f}"
+    )
+    print(
+        f"  Torres enemigas: L={n.left_enemy_princess_hp:.0f}  R={n.right_enemy_princess_hp:.0f}  K={n.enemy_king_hp:.0f}"
+    )
     print(f"  Aliados:  {len(s0.allies)} unidades")
     print(f"  Enemigos: {len(s0.enemies)} unidades")
     print(f"  Mano: {[c.name for c in s0.cards]}")
@@ -79,29 +83,31 @@ def main() -> None:
     idx += 1
     print(f"  [{idx:4d}] elixir enemigo / 10    = {obs_full[1]:.3f}  (fog: {obs_fog[1]:.3f})")
     idx += 1
-    print(f"  [{idx:4d}-{idx+5:4d}] HP torres (6 valores)")
+    print(f"  [{idx:4d}-{idx + 5:4d}] HP torres (6 valores)")
     tower_labels = ["L propia", "R propia", "K propio", "L enemiga", "R enemiga", "K enemigo"]
     for j, label in enumerate(tower_labels):
-        print(f"         [{idx+j}] {label:12s} = {obs_full[idx+j]:.3f}")
+        print(f"         [{idx + j}] {label:12s} = {obs_full[idx + j]:.3f}")
     idx += 6
 
-    print(f"  [{idx:4d}-{idx+35:4d}] Cartas en mano (4 × {len(CARD_VOCAB)+1} = {4*(len(CARD_VOCAB)+1)})")
+    print(
+        f"  [{idx:4d}-{idx + 35:4d}] Cartas en mano (4 × {len(CARD_VOCAB) + 1} = {4 * (len(CARD_VOCAB) + 1)})"
+    )
     for c_i in range(4):
         start = idx + c_i * (len(CARD_VOCAB) + 1)
-        one_hot = obs_full[start:start + len(CARD_VOCAB)]
+        one_hot = obs_full[start : start + len(CARD_VOCAB)]
         cost = obs_full[start + len(CARD_VOCAB)]
         card_detected = CARD_VOCAB[int(np.argmax(one_hot))] if one_hot.max() > 0 else "?"
         print(f"         carta[{c_i}] = {card_detected:12s}  costo_norm={cost:.2f}")
     idx += 4 * (len(CARD_VOCAB) + 1)
 
-    print(f"  [{idx:4d}-{idx+575:4d}] Grid aliados  (32×18 = 576)")
-    ally_grid = obs_full[idx:idx + 576].reshape(32, 18)
+    print(f"  [{idx:4d}-{idx + 575:4d}] Grid aliados  (32×18 = 576)")
+    ally_grid = obs_full[idx : idx + 576].reshape(32, 18)
     n_ally_cells = int(ally_grid.sum())
     print(f"         Celdas ocupadas: {n_ally_cells}")
     idx += 576
 
-    print(f"  [{idx:4d}-{idx+575:4d}] Grid enemigos (32×18 = 576)")
-    enemy_grid = obs_full[idx:idx + 576].reshape(32, 18)
+    print(f"  [{idx:4d}-{idx + 575:4d}] Grid enemigos (32×18 = 576)")
+    enemy_grid = obs_full[idx : idx + 576].reshape(32, 18)
     n_enemy_cells = int(enemy_grid.sum())
     print(f"         Celdas ocupadas: {n_enemy_cells}")
 

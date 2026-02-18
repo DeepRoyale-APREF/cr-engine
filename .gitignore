@@ -15,8 +15,8 @@ pip-wheel-metadata/
 # ── Virtual Environments ──────────────────────────────────────────────
 .venv/
 venv/
-env/
-ENV/
+/env/
+/ENV/
 .conda/
 
 # ── Testing ───────────────────────────────────────────────────────────

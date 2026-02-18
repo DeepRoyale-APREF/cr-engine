@@ -15,25 +15,25 @@ license = { text = "MIT" }
 
 dependencies = [
     "numpy>=1.26",
+    "pygame>=2.6",
     "gymnasium>=1.0",
 ]
 
 [project.optional-dependencies]
+
+# Reinforcement-learning helpers — PyTorch policy + SB3 (install with: pip install clash-royale-engine[rl])
 rl = [
     "stable-baselines3>=2.3",
     "torch",
 ]
 
+# Development tools
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.5",
     "pyrefly>=0.52.0",
-    "mypy>=1.8",  # Opcional: mantenlo si lo usas en terminal/CI
-]
-
-render = [
-    "pygame>=2.6"
+    "mypy>=1.8",
 ]
 
 [tool.setuptools.packages.find]
@@ -43,7 +43,8 @@ include = ["clash_royale_engine*"]
 line-length = 100
 target-version = "py312"
 # Ruff por defecto ya incluye las reglas de isort y sigue el estilo de black
-lint.select = ["E", "F", "I"] 
+[tool.ruff.lint]
+select = ["E", "F", "I"]
 
 [tool.mypy]
 python_version = "3.12"

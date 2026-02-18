@@ -8,9 +8,7 @@ from clash_royale_engine.entities.base_entity import Entity
 from clash_royale_engine.utils.constants import CARD_STATS, DEFAULT_FPS
 
 
-def create_archers(
-    player_id: int, x: float, y: float, fps: int = DEFAULT_FPS
-) -> List[Entity]:
+def create_archers(player_id: int, x: float, y: float, fps: int = DEFAULT_FPS) -> List[Entity]:
     """Factory: returns a list of 2 Archer entities with spawn offset."""
     s = CARD_STATS["archers"]
     offset = s.get("spawn_offset", 1.0) / 2.0

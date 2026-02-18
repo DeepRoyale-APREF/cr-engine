@@ -56,6 +56,9 @@ class Numbers:
     time_remaining: float  # seconds
     king_active: bool = False  # is our king tower active?
     enemy_king_active: bool = False  # is enemy king tower active?
+    is_double_elixir: bool = False  # last 60 s of regulation
+    is_overtime: bool = False  # extra minute (sudden death)
+    overtime_remaining: float = 0.0  # seconds left in overtime (0 when not overtime)
 
 
 @dataclass
@@ -69,6 +72,17 @@ class Card:
 
 
 @dataclass
+class SpellInfo:
+    """Lightweight snapshot of an active spell effect (for rendering)."""
+
+    name: str          # "arrows" | "fireball"
+    tile_x: float      # centre tile-x
+    tile_y: float      # centre tile-y
+    radius: float      # effect radius in tiles
+    remaining_frames: int
+
+
+@dataclass
 class State:
     """Full game state compatible with BuildABot."""
 
@@ -77,4 +91,5 @@ class State:
     numbers: Numbers
     cards: Tuple[Card, Card, Card, Card]
     ready: List[int]  # indices of playable cards (enough elixir)
+    active_spells: List[SpellInfo] = field(default_factory=list)
     screen: str = "battle"  # always "battle" during simulation

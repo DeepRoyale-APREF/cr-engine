@@ -34,7 +34,7 @@ def apply_fireball(
             if knockback > 0 and not t.is_building and dist > 0.01:
                 dx = t.x - center_x
                 dy = t.y - center_y
-                norm = (dx ** 2 + dy ** 2) ** 0.5
+                norm = (dx**2 + dy**2) ** 0.5
                 t.x += (dx / norm) * knockback
                 t.y += (dy / norm) * knockback
 
@@ -47,5 +47,5 @@ def apply_fireball(
         damage=damage,
         crown_tower_damage=crown_dmg,
         knockback=knockback,
-        remaining_frames=1,
+        remaining_frames=25,  # ~0.83 s at 30 fps
     )

@@ -39,6 +39,51 @@ from clash_royale_engine.utils.constants import (
 _LEFT_BRIDGE_CX: float = BRIDGE_LEFT_X + BRIDGE_WIDTH / 2.0
 _RIGHT_BRIDGE_CX: float = BRIDGE_RIGHT_X + BRIDGE_WIDTH / 2.0
 
+# ── lane-path constants ────────────────────────────────────────────────────────
+# Troops that have already crossed the bridge should march straight up their
+# lane and only turn horizontally toward the king once they are close to his
+# y-level.  This replicates the fixed path visible in the real game.
+#
+# Lane corridors (x bounds):
+#   left  lane: entity.x < _LEFT_LANE_X_MAX
+#   right lane: entity.x > _RIGHT_LANE_X_MIN
+# Outside these ranges the troop is near the centre and moves freely.
+_LEFT_LANE_X_MAX: float = 7.0
+_RIGHT_LANE_X_MIN: float = 11.0
+# How many tiles from the goal_y before the troop is allowed to move
+# horizontally toward the king.  Below this threshold it walks diagonally
+# (the "corner" of the L).
+_LANE_MERGE_Y_DIST: float = 4.0
+
+
+def _lane_path_goal(
+    entity_x: float,
+    entity_y: float,
+    goal_x: float,
+    goal_y: float,
+) -> tuple[float, float]:
+    """Constrain a goal so ground troops follow their lane path.
+
+    If the entity is clearly inside a left or right lane corridor and the
+    goal is toward the centre / opposite side, hold the x-coordinate fixed
+    until the entity is within ``_LANE_MERGE_Y_DIST`` tiles of goal_y.
+    This produces the characteristic L-shaped march: straight up the lane,
+    then a short horizontal jog to the king tower.
+    """
+    in_left_lane = entity_x < _LEFT_LANE_X_MAX and goal_x > entity_x + 1.0
+    in_right_lane = entity_x > _RIGHT_LANE_X_MIN and goal_x < entity_x - 1.0
+
+    if not (in_left_lane or in_right_lane):
+        return goal_x, goal_y
+
+    # Still far from the king's y-level → keep marching straight up the lane
+    if abs(goal_y - entity_y) > _LANE_MERGE_Y_DIST:
+        return entity_x, goal_y  # freeze x, keep y target
+
+    # Close enough → allow the horizontal turn toward the king
+    return goal_x, goal_y
+
+
 
 def _is_on_bridge(x: float) -> bool:
     """Return *True* if *x* falls within either bridge lane (± 0.5 tolerance)."""
@@ -65,7 +110,9 @@ def _nearest_bridge_cx(x: float) -> float:
 
 
 def _bridge_waypoint(
-    entity_x: float, entity_y: float, goal_y: float,
+    entity_x: float,
+    entity_y: float,
+    goal_y: float,
 ) -> Optional[Tuple[float, float]]:
     """
     Return an intermediate waypoint that routes the entity through the
@@ -112,7 +159,10 @@ class PhysicsEngine:
     # ── internal ──────────────────────────────────────────────────────────
 
     def _move_entity(
-        self, entity: Entity, all_entities: List[Entity], dt: float,
+        self,
+        entity: Entity,
+        all_entities: List[Entity],
+        dt: float,
     ) -> None:
         desired = self._desired_velocity(entity)
 
@@ -160,13 +210,14 @@ class PhysicsEngine:
             goal_y = entity.y + direction * 20.0  # far ahead
 
         # Ground troop bridge routing
-        if (
-            entity.transport == "ground"
-            and _needs_bridge(entity.y, goal_y)
-        ):
+        if entity.transport == "ground" and _needs_bridge(entity.y, goal_y):
             wp = _bridge_waypoint(entity.x, entity.y, goal_y)
             if wp is not None:
                 goal_x, goal_y = wp
+        elif entity.transport == "ground":
+            # Lane-path enforcement: once across the bridge, troops march
+            # straight up their lane before turning to the king tower.
+            goal_x, goal_y = _lane_path_goal(entity.x, entity.y, goal_x, goal_y)
 
         dx = goal_x - entity.x
         dy = goal_y - entity.y
@@ -197,9 +248,8 @@ class PhysicsEngine:
         in_river = RIVER_Y_MIN <= new_y <= RIVER_Y_MAX
 
         # Fast-entity hop: crossed from one bank to the other in one frame
-        jumped = (
-            (old_y < RIVER_Y_MIN and new_y > RIVER_Y_MAX)
-            or (old_y > RIVER_Y_MAX and new_y < RIVER_Y_MIN)
+        jumped = (old_y < RIVER_Y_MIN and new_y > RIVER_Y_MAX) or (
+            old_y > RIVER_Y_MAX and new_y < RIVER_Y_MIN
         )
 
         if not in_river and not jumped:

@@ -63,9 +63,10 @@ class HeuristicBot(PlayerInterface):
       at a default strategic tile on own side.
     """
 
-    def __init__(self, aggression: float = 0.5) -> None:
+    def __init__(self, aggression: float = 0.5, seed: int = 42) -> None:
         self.aggression = aggression  # 0 = very passive, 1 = very aggressive
-        self._rng = random.Random(42)
+        self._seed = seed
+        self._rng = random.Random(seed)
 
     def get_action(self, state: State) -> Optional[Tuple[int, int, int]]:
         elixir = state.numbers.elixir
@@ -94,7 +95,7 @@ class HeuristicBot(PlayerInterface):
         return (tile_x, tile_y, card_idx)
 
     def reset(self) -> None:
-        self._rng = random.Random(42)
+        self._rng = random.Random(self._seed)
 
 
 class HumanPlayer(PlayerInterface):
