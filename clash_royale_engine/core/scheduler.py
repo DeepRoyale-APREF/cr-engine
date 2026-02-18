@@ -36,6 +36,13 @@ class Scheduler:
         return self.elapsed_seconds >= self.game_duration
 
     @property
+    def overtime_remaining(self) -> float:
+        """Seconds remaining in overtime (0.0 when not in overtime)."""
+        if not self.is_overtime:
+            return 0.0
+        return max(0.0, self.game_duration + self.overtime_duration - self.elapsed_seconds)
+
+    @property
     def is_time_up(self) -> bool:
         return self.elapsed_seconds >= self.game_duration + self.overtime_duration
 

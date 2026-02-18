@@ -9,4 +9,4 @@ dependencies:
   - pytorch-cuda=12.1
   - pip
   - pip:
-      - -e .[rl,dev,render]
+      - -e .[rl,dev]

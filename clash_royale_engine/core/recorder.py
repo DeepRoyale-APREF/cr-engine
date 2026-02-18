@@ -16,14 +16,17 @@ quadruple the training data from a single match.
 
 from __future__ import annotations
 
+import pickle
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
 from clash_royale_engine.core.state import (
     Numbers,
     Position,
+    SpellInfo,
     State,
     UnitDetection,
 )
@@ -71,6 +74,22 @@ class GameRecord:
     deck_p1: List[str] = field(default_factory=list)
     total_frames: int = 0
 
+    # ── persistence ───────────────────────────────────────────────────
+
+    def save(self, path: Union[str, Path]) -> None:
+        """Serialise this record to *path* using pickle."""
+        with open(path, "wb") as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    @classmethod
+    def load(cls, path: Union[str, Path]) -> "GameRecord":
+        """Load a previously saved :class:`GameRecord` from *path*."""
+        with open(path, "rb") as f:
+            obj = pickle.load(f)
+        if not isinstance(obj, cls):
+            raise TypeError(f"Expected GameRecord, got {type(obj)}")
+        return obj
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # Recorder  (attach to engine, collects frames)
@@ -103,9 +122,7 @@ class GameRecorder:
         self._frames.clear()
         self._pending_actions = {0: None, 1: None}
 
-    def record_action(
-        self, player_id: int, action: Optional[Tuple[int, int, int]]
-    ) -> None:
+    def record_action(self, player_id: int, action: Optional[Tuple[int, int, int]]) -> None:
         """Register the action a player took this frame."""
         self._pending_actions[player_id] = action
 
@@ -183,6 +200,26 @@ def _flip_detection_x(det: UnitDetection) -> UnitDetection:
     )
 
 
+def _flip_spell_y(s: SpellInfo) -> SpellInfo:
+    return SpellInfo(
+        name=s.name,
+        tile_x=s.tile_x,
+        tile_y=N_HEIGHT_TILES - 1 - s.tile_y,
+        radius=s.radius,
+        remaining_frames=s.remaining_frames,
+    )
+
+
+def _flip_spell_x(s: SpellInfo) -> SpellInfo:
+    return SpellInfo(
+        name=s.name,
+        tile_x=N_WIDE_TILES - 1 - s.tile_x,
+        tile_y=s.tile_y,
+        radius=s.radius,
+        remaining_frames=s.remaining_frames,
+    )
+
+
 def flip_state_y(state: State) -> State:
     """Flip *state* vertically — normalises Player 1's view to bottom."""
     return State(
@@ -191,6 +228,7 @@ def flip_state_y(state: State) -> State:
         numbers=state.numbers,  # tower HPs are already from player's perspective
         cards=state.cards,
         ready=list(state.ready),
+        active_spells=[_flip_spell_y(s) for s in state.active_spells],
     )
 
 
@@ -210,6 +248,11 @@ def flip_state_x(state: State) -> State:
         right_enemy_princess_hp=n.left_enemy_princess_hp,
         enemy_king_hp=n.enemy_king_hp,
         time_remaining=n.time_remaining,
+        king_active=n.king_active,
+        enemy_king_active=n.enemy_king_active,
+        is_double_elixir=n.is_double_elixir,
+        is_overtime=n.is_overtime,
+        overtime_remaining=n.overtime_remaining,
     )
     return State(
         allies=[_flip_detection_x(a) for a in state.allies],
@@ -217,6 +260,7 @@ def flip_state_x(state: State) -> State:
         numbers=new_numbers,
         cards=state.cards,
         ready=list(state.ready),
+        active_spells=[_flip_spell_x(s) for s in state.active_spells],
     )
 
 
@@ -257,6 +301,11 @@ def apply_fog_of_war(state: State) -> State:
         right_enemy_princess_hp=n.right_enemy_princess_hp,
         enemy_king_hp=n.enemy_king_hp,
         time_remaining=n.time_remaining,
+        king_active=n.king_active,
+        enemy_king_active=n.enemy_king_active,
+        is_double_elixir=n.is_double_elixir,
+        is_overtime=n.is_overtime,
+        overtime_remaining=n.overtime_remaining,
     )
     return State(
         allies=state.allies,
@@ -264,6 +313,7 @@ def apply_fog_of_war(state: State) -> State:
         numbers=fog_numbers,
         cards=state.cards,
         ready=list(state.ready),
+        active_spells=state.active_spells,
     )
 
 
@@ -413,7 +463,12 @@ class EpisodeExtractor:
 
             is_last = i == last_idx
             reward = self.reward_fn(
-                state, action, next_state, player_id, record.winner, is_last,
+                state,
+                action,
+                next_state,
+                player_id,
+                record.winner,
+                is_last,
             )
 
             transitions.append(
@@ -458,3 +513,33 @@ class EpisodeExtractor:
             "dones": np.array(dones, dtype=bool),
             "episode_ids": np.array(ep_ids, dtype=np.int64),
         }
+
+    @staticmethod
+    def save_numpy(
+        path: Union[str, Path],
+        episodes: List[List[Transition]],
+    ) -> None:
+        """Flatten *episodes* and save to a compressed ``.npz`` file.
+
+        Parameters
+        ----------
+        path:
+            Destination file path (e.g. ``data/game_001.npz``).
+        episodes:
+            List of episode trajectories as returned by :meth:`extract`.
+        """
+        batch = EpisodeExtractor.episodes_to_numpy(episodes)
+        np.savez_compressed(str(path), **batch)
+
+    @staticmethod
+    def load_numpy(path: Union[str, Path]) -> Dict[str, np.ndarray]:
+        """Load a ``.npz`` batch previously saved by :meth:`save_numpy`.
+
+        Returns
+        -------
+        dict
+            Same keys as :meth:`episodes_to_numpy`:
+            ``states, actions, rewards, next_states, dones, episode_ids``.
+        """
+        data = np.load(str(path))
+        return {k: data[k] for k in data.files}

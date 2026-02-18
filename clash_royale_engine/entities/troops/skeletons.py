@@ -9,9 +9,7 @@ from clash_royale_engine.entities.base_entity import Entity
 from clash_royale_engine.utils.constants import CARD_STATS, DEFAULT_FPS
 
 
-def create_skeletons(
-    player_id: int, x: float, y: float, fps: int = DEFAULT_FPS
-) -> List[Entity]:
+def create_skeletons(player_id: int, x: float, y: float, fps: int = DEFAULT_FPS) -> List[Entity]:
     """Factory: returns a list of 3 Skeleton entities in triangle formation."""
     s = CARD_STATS["skeletons"]
     offsets = _triangle_offsets(spacing=0.6)
@@ -43,6 +41,5 @@ def _triangle_offsets(spacing: float = 0.6) -> List[tuple[float, float]]:
     """Return 3 (dx, dy) offsets forming an equilateral triangle."""
     angle_step = 2.0 * math.pi / 3.0
     return [
-        (spacing * math.cos(i * angle_step), spacing * math.sin(i * angle_step))
-        for i in range(3)
+        (spacing * math.cos(i * angle_step), spacing * math.sin(i * angle_step)) for i in range(3)
     ]

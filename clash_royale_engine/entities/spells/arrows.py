@@ -53,5 +53,5 @@ def apply_arrows(
         damage=damage,
         crown_tower_damage=crown_dmg,
         knockback=0.0,
-        remaining_frames=1,
+        remaining_frames=20,  # ~0.67 s at 30 fps
     )

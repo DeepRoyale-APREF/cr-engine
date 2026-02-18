@@ -12,10 +12,8 @@ from clash_royale_engine.utils.constants import (
     LANE_DIVIDER_X,
     N_HEIGHT_TILES,
     N_WIDE_TILES,
-    PLAYABLE_HEIGHT_TILES,
     POCKET_DEPTH,
     RIVER_Y_MAX,
-    RIVER_Y_MIN,
 )
 
 if TYPE_CHECKING:

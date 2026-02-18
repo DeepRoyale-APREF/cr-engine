@@ -28,15 +28,23 @@ def main() -> None:
     bot1 = HeuristicBot(aggression=0.6)
     bot2 = HeuristicBot(aggression=0.5)
 
+    SPEED = 1.0
+    TIME_LIMIT = 180.0
+
     engine = ClashRoyaleEngine(
         player1=bot1,
         player2=bot2,
         fps=30,
-        time_limit=180.0,
-        speed_multiplier=1.0,
+        time_limit=TIME_LIMIT,
+        speed_multiplier=SPEED,
     )
 
-    renderer = Renderer(fps=30, title="Clash Royale — Bot vs Bot")
+    renderer = Renderer(
+        fps=30,
+        title="Clash Royale — Bot vs Bot",
+        speed_multiplier=SPEED,
+        game_duration=TIME_LIMIT,
+    )
 
     print("Iniciando simulación con GUI...")
     print("Presiona ESC o cierra la ventana para salir.\n")

@@ -40,7 +40,7 @@ def main() -> None:
     env = ClashRoyaleEnv(
         record=True,
         fog_of_war=True,
-        time_limit=30.0,   # partida corta para el demo
+        time_limit=30.0,  # partida corta para el demo
         reward_shaping="sparse",
     )
 

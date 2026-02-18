@@ -7,20 +7,27 @@ Player 0 is the RL agent; Player 1 is driven by a :class:`PlayerInterface`
 
 from __future__ import annotations
 
-import time
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-
 import gymnasium as gym
+import numpy as np
 from gymnasium import spaces
 
 from clash_royale_engine.core.engine import ClashRoyaleEngine
+from clash_royale_engine.core.recorder import (
+    EpisodeExtractor,
+    GameRecord,
+    Transition,
+    apply_fog_of_war,
+)
 from clash_royale_engine.core.state import State
-from clash_royale_engine.players.player_interface import HeuristicBot, PlayerInterface, RLAgentPlayer
+from clash_royale_engine.players.player_interface import (
+    HeuristicBot,
+    PlayerInterface,
+    RLAgentPlayer,
+)
 from clash_royale_engine.utils.constants import (
-    CARD_STATS,
     CARD_VOCAB,
     DEFAULT_DECK,
     DEFAULT_FPS,
@@ -32,12 +39,6 @@ from clash_royale_engine.utils.constants import (
     PRINCESS_TOWER_STATS,
 )
 from clash_royale_engine.utils.validators import InvalidActionError
-from clash_royale_engine.core.recorder import (
-    EpisodeExtractor,
-    GameRecord,
-    Transition,
-    apply_fog_of_war,
-)
 
 
 class ObservationType(Enum):
@@ -155,21 +156,15 @@ class ClashRoyaleEnv(gym.Env):
         info: Dict[str, Any] = {"raw_state": state}
         return obs, info
 
-    def step(
-        self, action: int
-    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         decoded = self._decode_action(action)
         action_valid = True
 
         try:
-            state_p0, _, done = self.engine.step_with_action(
-                player_id=0, action=decoded
-            )
+            state_p0, _, done = self.engine.step_with_action(player_id=0, action=decoded)
         except InvalidActionError:
             # Action was invalid — still advance one frame so time progresses
-            state_p0, _, done = self.engine.step_with_action(
-                player_id=0, action=None
-            )
+            state_p0, _, done = self.engine.step_with_action(player_id=0, action=None)
             action_valid = False
 
         reward = self._calculate_reward(state_p0, action_valid)
@@ -324,7 +319,8 @@ class ClashRoyaleEnv(gym.Env):
         return self.engine.get_last_record()
 
     def extract_il_episodes(
-        self, record: Optional[GameRecord] = None,
+        self,
+        record: Optional[GameRecord] = None,
     ) -> List[List[Transition]]:
         """Extract **4 IL episodes** from the last game (or a provided record).
 

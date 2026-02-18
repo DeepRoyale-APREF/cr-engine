@@ -15,12 +15,9 @@ import numpy as np
 from clash_royale_engine.core.engine import ClashRoyaleEngine
 from clash_royale_engine.env.gymnasium_env import ClashRoyaleEnv, ObservationType
 from clash_royale_engine.players.player_interface import (
-    HeuristicBot,
-    PlayerInterface,
     RLAgentPlayer,
 )
 from clash_royale_engine.utils.constants import DEFAULT_DECK, DEFAULT_FPS, GAME_DURATION
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Multi-Agent (2-player) env
@@ -72,7 +69,7 @@ class MultiAgentClashRoyaleEnv:
 
         Returns (obs0, obs1, reward0, reward1, done, info).
         """
-        from clash_royale_engine.utils.validators import InvalidActionError, validate_action
+        from clash_royale_engine.utils.validators import validate_action
 
         # Apply P0
         if action_p0 is not None:

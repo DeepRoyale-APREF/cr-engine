@@ -48,7 +48,9 @@ def run_episode(env: ClashRoyaleEnv, label: str) -> None:
 
     print(f"\n  [{label}]")
     print(f"    Steps: {steps}")
-    print(f"    Acciones válidas: {valid_actions} / {steps} ({100 * valid_actions / max(steps, 1):.1f}%)")
+    print(
+        f"    Acciones válidas: {valid_actions} / {steps} ({100 * valid_actions / max(steps, 1):.1f}%)"
+    )
     print(f"    Reward total: {total_reward:.4f}")
     print(f"    Ganador: {'P0' if winner == 0 else 'P1' if winner == 1 else 'Empate'}")
     print(f"    Obs shape: {obs.shape}")

@@ -25,6 +25,62 @@ from typing import List, Optional
 from clash_royale_engine.entities.base_entity import Entity
 from clash_royale_engine.entities.buildings.king_tower import KingTowerEntity
 
+# ── lane constants ────────────────────────────────────────────────────────────
+# Arena is 18 tiles wide.  Left lane is x < 9, right lane is x ≥ 9.
+_ARENA_HALF_X: float = 9.0
+
+
+def _lane_priority_building(
+    entity: Entity,
+    buildings: List[Entity],
+) -> Optional[Entity]:
+    """Return the highest-priority enemy building for *entity* to march toward.
+
+    Clash Royale lane routing (strict priority, not weighted distance):
+      1. Same-lane princess tower (alive) → must destroy before anything else.
+      2. King tower → after same-lane princess falls.
+      3. Opposite-lane princess tower → last resort or very close proximity.
+
+    Parameters
+    ----------
+    entity:
+        The moving troop looking for a building target.
+    buildings:
+        Pre-filtered list of alive enemy buildings visible to the system
+        (may be the full-map list in the out-of-range fallback, or the
+        subset within sight range).
+    """
+    entity_left = entity.x < _ARENA_HALF_X
+
+    same_lane: List[Entity] = []
+    kings: List[Entity] = []
+    opp_lane: List[Entity] = []
+
+    for b in buildings:
+        if b.is_dead or b.player_id == entity.player_id:
+            continue
+        if isinstance(b, KingTowerEntity):
+            kings.append(b)
+        else:
+            b_left = b.x < _ARENA_HALF_X
+            if b_left == entity_left:
+                same_lane.append(b)
+            else:
+                opp_lane.append(b)
+
+    # 1. Same-lane princess alive → must go there first
+    if same_lane:
+        return min(same_lane, key=lambda t: entity.distance_to(t))
+
+    # 2. King tower → primary target once own-lane princess is down
+    if kings:
+        return min(kings, key=lambda t: entity.distance_to(t))
+
+    # 3. Opposite-lane princess → last resort
+    if opp_lane:
+        return min(opp_lane, key=lambda t: entity.distance_to(t))
+
+    return None
 
 class TargetingSystem:
     """Stateless helper — call :meth:`update_targets` once per frame."""
@@ -70,25 +126,32 @@ class TargetingSystem:
                 in_range.append(t)
 
         if not in_range:
-            # Building-targeting troops (e.g. Giant) always know where
-            # enemy buildings are — search the whole map as fallback.
-            if entity.target_type == "buildings":
-                all_enemy_buildings = [
-                    t for t in potential_targets
-                    if not t.is_dead
-                    and t.player_id != entity.player_id
-                    and t.is_building
-                ]
-                if all_enemy_buildings:
-                    return min(all_enemy_buildings, key=lambda t: entity.distance_to(t))
-            return None
+            # Out-of-range fallback: march toward the correct building based on
+            # strict lane priority (same-lane princess → king → opp princess).
+            all_enemy_buildings = [
+                t
+                for t in potential_targets
+                if not t.is_dead and t.player_id != entity.player_id and t.is_building
+            ]
+            return _lane_priority_building(entity, all_enemy_buildings)
 
         # Filter by target type
         valid = TargetingSystem._filter_by_type(entity.target_type, in_range)
         if not valid:
             return None
 
-        return min(valid, key=lambda t: entity.distance_to(t))
+        # For sight-range targets: non-building enemies are picked by proximity.
+        # When only buildings are visible, use lane priority so troops don't
+        # accidentally attack the king before the same-lane princess is down.
+        non_buildings = [t for t in valid if not t.is_building]
+        if non_buildings:
+            return min(non_buildings, key=lambda t: entity.distance_to(t))
+
+        buildings_in_range = [t for t in valid if t.is_building]
+        if buildings_in_range:
+            return _lane_priority_building(entity, buildings_in_range)
+
+        return None
 
     @staticmethod
     def _filter_by_type(target_type: str, candidates: List[Entity]) -> List[Entity]:

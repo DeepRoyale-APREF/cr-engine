@@ -15,6 +15,7 @@ from clash_royale_engine.core.state import (
     Card,
     Numbers,
     Position,
+    SpellInfo,
     State,
     Unit,
     UnitDetection,
@@ -102,6 +103,9 @@ class ClashRoyaleEngine:
         self._done: bool = False
         self._winner: Optional[int] = None  # 0, 1, or None (draw)
 
+        # Crown snapshot taken the first frame overtime begins (for sudden-death detection)
+        self._regulation_crowns: Optional[List[int]] = None
+
         # Previous tower HP (for reward computation)
         self._prev_tower_hp: Dict[str, float] = {}
 
@@ -152,6 +156,7 @@ class ClashRoyaleEngine:
         self.elixir_system.reset()
         self._done = False
         self._winner = None
+        self._regulation_crowns = None
 
         for p in self.players:
             p.reset(seed=self.seed)
@@ -341,6 +346,13 @@ class ClashRoyaleEngine:
         # Remove dead troops (keep dead buildings for state awareness)
         self.arena.cleanup_dead()
 
+        # Tick down active spell visuals and purge expired ones
+        for fx in self.arena.spell_effects:
+            fx.remaining_frames -= 1
+        self.arena.spell_effects = [
+            fx for fx in self.arena.spell_effects if fx.remaining_frames > 0
+        ]
+
         # Game-over
         self._check_game_over()
 
@@ -395,9 +407,16 @@ class ClashRoyaleEngine:
 
     # ── game over ─────────────────────────────────────────────────────────
 
-    def _check_game_over(self) -> None:
-        """Check win conditions: king tower destroyed or time up."""
-        # King tower destruction → immediate win
+    def _check_game_over(self) -> None:  # noqa: C901
+        """Check win conditions per Clash Royale rules.
+
+        Priority:
+        1. King tower destroyed → immediate win (any time).
+        2. Regulation (3:00) ends → if crown counts differ, winner declared.
+        3. Overtime sudden death → first new tower destroyed wins.
+        4. Overtime expires (4:00) → HP tiebreaker.
+        """
+        # 1. King destruction — ends game immediately at any time
         for pid in (0, 1):
             king = self.arena.king_tower(pid)
             if king is None or king.is_dead:
@@ -405,29 +424,53 @@ class ClashRoyaleEngine:
                 self._winner = 1 - pid
                 return
 
-        # Time up
+        # 2 & 3. Overtime handling
+        if self.scheduler.is_overtime:
+            if self._regulation_crowns is None:
+                # First frame we cross 3:00 — snapshot crowns
+                crowns = self._count_crowns()
+                if crowns[0] != crowns[1]:
+                    # Unequal at regulation end → winner now
+                    self._done = True
+                    self._winner = 0 if crowns[0] > crowns[1] else 1
+                    return
+                # Equal → overtime begins; record baseline snapshot
+                self._regulation_crowns = crowns[:]
+
+            # 3. Sudden death — first tower destroyed after overtime started wins
+            current = self._count_crowns()
+            if current[0] > self._regulation_crowns[0]:
+                self._done = True
+                self._winner = 0
+                return
+            if current[1] > self._regulation_crowns[1]:
+                self._done = True
+                self._winner = 1
+                return
+
+        # 4. Overtime expired with no sudden-death event → HP tiebreaker
         if self.scheduler.is_time_up:
             self._done = True
             self._winner = self._determine_winner_by_crowns()
             return
 
-    def _determine_winner_by_crowns(self) -> Optional[int]:
-        """Count destroyed princess towers (crowns). Most crowns wins."""
+    def _count_crowns(self) -> List[int]:
+        """Return [crowns_for_p0, crowns_for_p1] based on destroyed towers."""
         crowns = [0, 0]
         for pid in (0, 1):
             opponent = 1 - pid
             for side in ("left_princess", "right_princess"):
                 if self.arena.tower_hp(opponent, side) <= 0:
                     crowns[pid] += 1
-            if self.arena.tower_hp(opponent, "king") <= 0:
-                crowns[pid] += 3
+        return crowns
 
-        if crowns[0] > crowns[1]:
-            return 0
-        elif crowns[1] > crowns[0]:
-            return 1
+    def _determine_winner_by_crowns(self) -> Optional[int]:
+        """HP tiebreaker used only when crown counts are equal after overtime."""
+        crowns = self._count_crowns()
+        if crowns[0] != crowns[1]:
+            return 0 if crowns[0] > crowns[1] else 1
 
-        # Tiebreaker: total HP difference on remaining towers
+        # Equal crowns → lowest total HP remaining loses
         hp0 = sum(self.arena.tower_hp(0, t) for t in ("left_princess", "right_princess", "king"))
         hp1 = sum(self.arena.tower_hp(1, t) for t in ("left_princess", "right_princess", "king"))
         if hp0 > hp1:
@@ -484,18 +527,32 @@ class ClashRoyaleEngine:
             time_remaining=self.scheduler.time_remaining,
             king_active=king_active,
             enemy_king_active=enemy_king_active,
+            is_double_elixir=self.scheduler.is_double_elixir,
+            is_overtime=self.scheduler.is_overtime,
+            overtime_remaining=self.scheduler.overtime_remaining,
         )
 
         # Cards
         cards_tuple = self._build_cards(player)
         ready = player.playable_indices(elixir)
 
+        active_spells = [
+            SpellInfo(
+                name=fx.name,
+                tile_x=fx.center_x,
+                tile_y=fx.center_y,
+                radius=fx.radius,
+                remaining_frames=fx.remaining_frames,
+            )
+            for fx in self.arena.spell_effects
+        ]
         return State(
             allies=allies,
             enemies=enemies,
             numbers=numbers,
             cards=cards_tuple,
             ready=ready,
+            active_spells=active_spells,
         )
 
     def _detections_for(self, player_id: int) -> List[UnitDetection]:

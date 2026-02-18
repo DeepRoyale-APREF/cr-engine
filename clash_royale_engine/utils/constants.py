@@ -43,14 +43,14 @@ DEFAULT_DEPLOY_TIME: float = 1.0  # seconds
 # ────────────────────────────── BRIDGE POSITIONS (tile coords) ─────────────────
 # Bridges connect the two halves of the arena
 BRIDGE_LEFT_X: int = 3
-BRIDGE_RIGHT_X: int = 14
+BRIDGE_RIGHT_X: int = 13  # tiles 13-14; symmetric with left bridge (tiles 3-4)
 BRIDGE_Y: int = 15  # tile y where bridge sits (boundary between halves)
 
 # River geometry — the river is a 2-tile-deep horizontal band that blocks
 # ground movement.  Only bridge tiles allow crossing.
-RIVER_Y_MIN: float = 15.0   # bottom edge of river (== BRIDGE_Y)
-RIVER_Y_MAX: float = 17.0   # top edge of river (2 tiles deep)
-BRIDGE_WIDTH: float = 2.0   # each bridge spans 2 tiles in x
+RIVER_Y_MIN: float = 15.0  # bottom edge of river (== BRIDGE_Y)
+RIVER_Y_MAX: float = 17.0  # top edge of river (2 tiles deep)
+BRIDGE_WIDTH: float = 2.0  # each bridge spans 2 tiles in x
 
 # ────────────────────────────── POCKET PLACEMENT ───────────────────────────────
 # When an enemy princess tower is destroyed, the attacker may deploy troops in

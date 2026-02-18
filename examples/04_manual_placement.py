@@ -30,8 +30,12 @@ def print_state(label: str, state) -> None:
     n = state.numbers
     print(f"\n  ── {label} ──")
     print(f"  Elixir propio: {n.elixir:.1f}  |  Enemigo: {n.enemy_elixir:.1f}")
-    print(f"  Torres propias:  L={n.left_princess_hp:.0f}  R={n.right_princess_hp:.0f}  K={n.king_hp:.0f}")
-    print(f"  Torres enemigas: L={n.left_enemy_princess_hp:.0f}  R={n.right_enemy_princess_hp:.0f}  K={n.enemy_king_hp:.0f}")
+    print(
+        f"  Torres propias:  L={n.left_princess_hp:.0f}  R={n.right_princess_hp:.0f}  K={n.king_hp:.0f}"
+    )
+    print(
+        f"  Torres enemigas: L={n.left_enemy_princess_hp:.0f}  R={n.right_enemy_princess_hp:.0f}  K={n.enemy_king_hp:.0f}"
+    )
     print(f"  Tiempo restante: {n.time_remaining:.1f}s")
     print(f"  Mano: {[c.name for c in state.cards]}")
     print(f"  Índices jugables: {state.ready}")

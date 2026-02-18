@@ -30,9 +30,7 @@ from clash_royale_engine.utils.constants import (
 )
 from clash_royale_engine.utils.validators import InvalidActionError
 
-TROOP_NAMES = [
-    name for name, s in CARD_STATS.items() if not s.get("is_spell", False)
-]
+TROOP_NAMES = [name for name, s in CARD_STATS.items() if not s.get("is_spell", False)]
 
 
 def _find_troop_idx(engine, player_id: int) -> tuple[int, str]:
@@ -73,22 +71,34 @@ def main() -> None:
 
     _refill_elixir(engine)
 
-    pocket_y = int(RIVER_Y_MAX)           # 17 — primera fila del pocket
-    pocket_x_left = LANE_DIVIDER_X - 1    # 8  — carril izquierdo
-    pocket_x_right = LANE_DIVIDER_X       # 9  — carril derecho
+    pocket_y = int(RIVER_Y_MAX)  # 17 — primera fila del pocket
+    pocket_x_left = LANE_DIVIDER_X - 1  # 8  — carril izquierdo
+    pocket_x_right = LANE_DIVIDER_X  # 9  — carril derecho
 
     # ── 1) Intentar colocar tropa en lado enemigo (ambas torres vivas) ─
     troop_idx, troop_name = _find_troop_idx(engine, 0)
     print(f"\n  Mano de P0: {engine.players[0].hand}")
 
     print("\n  1) Intentar tropa en lado enemigo (torres vivas):")
-    try_place(engine, 0, pocket_x_left, pocket_y, troop_idx,
-              f"{troop_name} en ({pocket_x_left}, {pocket_y}) carril izquierdo")
+    try_place(
+        engine,
+        0,
+        pocket_x_left,
+        pocket_y,
+        troop_idx,
+        f"{troop_name} en ({pocket_x_left}, {pocket_y}) carril izquierdo",
+    )
 
     _refill_elixir(engine)
     troop_idx, troop_name = _find_troop_idx(engine, 0)
-    try_place(engine, 0, pocket_x_right, pocket_y, troop_idx,
-              f"{troop_name} en ({pocket_x_right}, {pocket_y}) carril derecho")
+    try_place(
+        engine,
+        0,
+        pocket_x_right,
+        pocket_y,
+        troop_idx,
+        f"{troop_name} en ({pocket_x_right}, {pocket_y}) carril derecho",
+    )
 
     # ── 2) Hechizo en lado enemigo (siempre permitido) ────────────────
     print("\n  2) Hechizo en lado enemigo (siempre permitido):")
@@ -103,8 +113,7 @@ def main() -> None:
             break
 
     if spell_idx is not None:
-        try_place(engine, 0, 9, 28, spell_idx,
-                  f"{spell_name} en (9, 28) — fondo del mapa enemigo")
+        try_place(engine, 0, 9, 28, spell_idx, f"{spell_name} en (9, 28) — fondo del mapa enemigo")
     else:
         print("    (no hay hechizo en mano, saltando)")
 
@@ -132,8 +141,14 @@ def main() -> None:
     print("\n  5) Pocket DERECHO (torre derecha aún viva):")
     _refill_elixir(engine)
     troop_idx, troop_name = _find_troop_idx(engine, 0)
-    try_place(engine, 0, pocket_x_right, pocket_y, troop_idx,
-              f"{troop_name} en ({pocket_x_right}, {pocket_y}) carril derecho")
+    try_place(
+        engine,
+        0,
+        pocket_x_right,
+        pocket_y,
+        troop_idx,
+        f"{troop_name} en ({pocket_x_right}, {pocket_y}) carril derecho",
+    )
 
     # ── 6) Destruir torre derecha y verificar ──────────────────────────
     print("\n  6) Destruyendo torre princesa DERECHA de P1...")
@@ -145,8 +160,14 @@ def main() -> None:
     troop_idx, troop_name = _find_troop_idx(engine, 0)
 
     print("\n  7) Colocar en pocket DERECHO (torre destruida):")
-    try_place(engine, 0, pocket_x_right, pocket_y, troop_idx,
-              f"{troop_name} en ({pocket_x_right}, {pocket_y}) carril derecho")
+    try_place(
+        engine,
+        0,
+        pocket_x_right,
+        pocket_y,
+        troop_idx,
+        f"{troop_name} en ({pocket_x_right}, {pocket_y}) carril derecho",
+    )
 
     # ── Resumen ────────────────────────────────────────────────────────
     print("\n" + "─" * 65)
