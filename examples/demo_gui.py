@@ -37,6 +37,7 @@ def main() -> None:
         fps=30,
         time_limit=TIME_LIMIT,
         speed_multiplier=SPEED,
+        seed=32
     )
 
     renderer = Renderer(

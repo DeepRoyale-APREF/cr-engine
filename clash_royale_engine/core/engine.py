@@ -638,3 +638,46 @@ class ClashRoyaleEngine:
             if self.arena.tower_hp(opponent_id, t) <= 0:
                 count += 1
         return count
+
+    def get_tower_damage_per_tower(self, player_id: int) -> Dict[str, float]:
+        """Return HP lost per opponent tower since last snapshot.
+
+        Keys: ``left_princess``, ``right_princess``, ``king``.
+        """
+        opponent_id = 1 - player_id
+        result: Dict[str, float] = {}
+        for t in ("left_princess", "right_princess", "king"):
+            key = f"p{opponent_id}_{t}"
+            prev = self._prev_tower_hp.get(key, 0.0)
+            curr = self.arena.tower_hp(opponent_id, t)
+            result[t] = max(0.0, prev - curr)
+        return result
+
+    def get_tower_loss_per_tower(self, player_id: int) -> Dict[str, float]:
+        """Return HP lost per own tower since last snapshot.
+
+        Keys: ``left_princess``, ``right_princess``, ``king``.
+        """
+        result: Dict[str, float] = {}
+        for t in ("left_princess", "right_princess", "king"):
+            key = f"p{player_id}_{t}"
+            prev = self._prev_tower_hp.get(key, 0.0)
+            curr = self.arena.tower_hp(player_id, t)
+            result[t] = max(0.0, prev - curr)
+        return result
+
+    def get_leaked_elixir(self, player_id: int) -> float:
+        """Return cumulative leaked elixir for *player_id*."""
+        return self.elixir_system.get_leaked(player_id)
+
+    def get_alive_troop_elixir_value(self, player_id: int) -> float:
+        """Return total elixir cost of alive non-building troops for *player_id*."""
+        from clash_royale_engine.utils.constants import CARD_STATS
+
+        total = 0.0
+        for e in self.arena.get_entities_for_player(player_id):
+            if not e.is_building:
+                stats = CARD_STATS.get(e.name)
+                if stats is not None:
+                    total += float(stats["elixir"])
+        return total
