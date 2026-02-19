@@ -320,6 +320,10 @@ class ClashRoyaleEngine:
 
     def _simulate_frame(self) -> None:
         """Physics, targeting, combat, elixir, cleanup, game-over check."""
+        # Snapshot tower HP *before* combat so that delta methods
+        # (get_tower_damage_per_tower, etc.) return this frame's damage.
+        self._snapshot_tower_hp()
+
         alive = self.arena.get_alive_entities()
 
         # Deployment ticking
@@ -355,9 +359,6 @@ class ClashRoyaleEngine:
 
         # Game-over
         self._check_game_over()
-
-        # Snapshot tower HP for reward delta
-        self._snapshot_tower_hp()
 
         # Record frame (god-view, before advancing clock)
         if self.recorder is not None:
@@ -681,3 +682,54 @@ class ClashRoyaleEngine:
                 if stats is not None:
                     total += float(stats["elixir"])
         return total
+
+    def debug_reward_signals(self, player_id: int) -> Dict[str, float]:
+        """Return a snapshot of all reward-relevant signals for debugging.
+
+        Useful for diagnosing zero-reward issues during training.
+
+        Parameters
+        ----------
+        player_id : int
+            The player whose perspective to report from.
+
+        Returns
+        -------
+        dict[str, float]
+            Keys include damage deltas, tower HPs, elixir values, troop counts.
+        """
+        opp = 1 - player_id
+        result: Dict[str, float] = {}
+
+        # Tower damage deltas (since last snapshot)
+        result["damage_dealt_total"] = self.get_tower_damage_delta(player_id)
+        result["damage_received_total"] = self.get_tower_loss_delta(player_id)
+
+        # Per-tower damage
+        for tower, hp in self.get_tower_damage_per_tower(player_id).items():
+            result[f"dmg_dealt_{tower}"] = hp
+        for tower, hp in self.get_tower_loss_per_tower(player_id).items():
+            result[f"dmg_recv_{tower}"] = hp
+
+        # Tower HPs
+        for t in ("left_princess", "right_princess", "king"):
+            result[f"own_{t}_hp"] = self.arena.tower_hp(player_id, t)
+            result[f"enemy_{t}_hp"] = self.arena.tower_hp(opp, t)
+
+        # Elixir
+        result["elixir"] = self.elixir_system.get(player_id)
+        result["leaked_elixir"] = self.get_leaked_elixir(player_id)
+        result["troop_elixir_value"] = self.get_alive_troop_elixir_value(player_id)
+
+        # Troop counts
+        result["own_troops"] = float(len(self.arena.get_entities_for_player(player_id)))
+        result["enemy_troops"] = float(len(self.arena.get_entities_for_player(opp)))
+
+        # Towers destroyed
+        result["towers_destroyed"] = float(self.count_towers_destroyed(player_id))
+
+        # Game state
+        result["time_remaining"] = self.scheduler.time_remaining
+        result["frame"] = float(self.scheduler.current_frame)
+
+        return result
