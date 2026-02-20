@@ -92,4 +92,5 @@ class State:
     cards: Tuple[Card, Card, Card, Card]
     ready: List[int]  # indices of playable cards (enough elixir)
     active_spells: List[SpellInfo] = field(default_factory=list)
+    deck: List[str] = field(default_factory=list)  # full 8-card deck names
     screen: str = "battle"  # always "battle" during simulation

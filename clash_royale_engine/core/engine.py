@@ -210,6 +210,10 @@ class ClashRoyaleEngine:
         if self._done:
             return self._get_state(0), self._get_state(1), True
 
+        # Snapshot tower HP BEFORE any actions (spells apply damage
+        # instantly in _apply_action, so we must capture HP first).
+        self._snapshot_tower_hp()
+
         # Validate & apply the provided action
         valid_own: Optional[Tuple[int, int, int]] = None
         if action is not None:
@@ -289,6 +293,9 @@ class ClashRoyaleEngine:
 
     def _tick_one_frame(self) -> None:
         """One full frame: read actions → apply → simulate."""
+        # Snapshot tower HP BEFORE actions so spell damage is captured.
+        self._snapshot_tower_hp()
+
         # Player actions
         s0 = self._get_state(0)
         s1 = self._get_state(1)
@@ -320,9 +327,9 @@ class ClashRoyaleEngine:
 
     def _simulate_frame(self) -> None:
         """Physics, targeting, combat, elixir, cleanup, game-over check."""
-        # Snapshot tower HP *before* combat so that delta methods
-        # (get_tower_damage_per_tower, etc.) return this frame's damage.
-        self._snapshot_tower_hp()
+        # NOTE: _snapshot_tower_hp() is now called in step_with_action()
+        # and _tick_one_frame() BEFORE actions, so that spell damage
+        # (applied instantly in _apply_action) is captured in the delta.
 
         alive = self.arena.get_alive_entities()
 
@@ -554,6 +561,7 @@ class ClashRoyaleEngine:
             cards=cards_tuple,
             ready=ready,
             active_spells=active_spells,
+            deck=list(player.deck),
         )
 
     def _detections_for(self, player_id: int) -> List[UnitDetection]:

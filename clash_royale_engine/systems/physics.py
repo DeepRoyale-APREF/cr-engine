@@ -283,6 +283,12 @@ class PhysicsEngine:
         for other in all_entities:
             if other is entity or other.is_dead:
                 continue
+            # In real CR, troops walk freely past their own buildings
+            # (towers).  Skip separation between friendly buildings and
+            # their owner's troops to prevent troops getting stuck behind
+            # their own princess/king towers.
+            if other.is_building and other.player_id == entity.player_id:
+                continue
             dx = entity.x - other.x
             dy = entity.y - other.y
             dist = float(np.hypot(dx, dy))
