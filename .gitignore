@@ -48,6 +48,8 @@ Thumbs.db
 Desktop.ini
 
 # ── RL Training Artifacts ─────────────────────────────────────────────
+runs/
+!runs/**/eval_summary.txt
 logs/
 tensorboard_logs/
 checkpoints/
@@ -55,6 +57,7 @@ checkpoints/
 *.pkl
 *.gz
 wandb/
+*.tfevents.*
 
 # ── Trained Models ────────────────────────────────────────────────────
 models/
