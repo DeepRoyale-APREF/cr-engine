@@ -1,0 +1,30 @@
+PPO Baseline — Evaluación
+========================================
+n_episodes: 10
+wins: 7
+losses: 3
+draws: 0
+win_rate: 0.7
+mean_reward: 0.4
+std_reward: 0.9165151389911679
+mean_ep_length: 3601.0
+
+Hiperparámetros:
+  timesteps: 50000
+  n_envs: 4
+  reward: dense
+  time_limit: 60.0
+  lr: 0.0003
+  batch_size: 64
+  n_steps: 2048
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  eval_episodes: 10
+  save_dir: runs
+  no_fog: False
+  seed: 42

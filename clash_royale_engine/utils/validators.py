@@ -59,15 +59,14 @@ def validate_placement(
     is_spell = stats.get("is_spell", False)
 
     # Placement zone — spells have no side restriction
+    #
+    # IMPORTANT: coordinates arrive in *player-perspective* space where
+    # tile_y 0 is the player's own king tower and tile_y increases toward
+    # the enemy.  _apply_action() later flips y for Player 1 into global
+    # coordinates.  Therefore the placement check is IDENTICAL for both
+    # players: own side is y in [0, BRIDGE_Y), enemy side is y >= BRIDGE_Y.
     if not is_spell:
-        on_enemy_side = False
-
-        # Both players see the world from their own perspective:
-        # tile_y in [0, BRIDGE_Y-1] is "own side", tile_y >= BRIDGE_Y is "enemy side".
-        # The engine flips P1's coordinates in _apply_action, so validation
-        # uses the same player-relative frame for both players.
-        if tile_y >= BRIDGE_Y:
-            on_enemy_side = True
+        on_enemy_side = tile_y >= BRIDGE_Y
 
         if on_enemy_side:
             # Check whether the placement is inside an unlocked pocket
@@ -115,9 +114,8 @@ def _is_pocket_allowed(
         return False
 
     # Verify the tile is within the pocket depth (not deep into enemy base).
-    # Both players use the same coordinate frame (own side = low y).
-    # The pocket is just past the river on the enemy's side.
-    pocket_min_y = int(RIVER_Y_MAX)  # 17
+    # Coordinates are in player-perspective: both players "attack upward".
+    pocket_min_y = int(RIVER_Y_MAX)       # 17
     pocket_max_y = int(RIVER_Y_MAX) + POCKET_DEPTH - 1  # 19
     return pocket_min_y <= tile_y <= pocket_max_y
 
