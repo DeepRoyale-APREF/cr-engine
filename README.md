@@ -20,7 +20,10 @@ Implementa 8 cartas específicas con física continua realista, sistema de comba
 - [Grabación y Extracción de Episodios (IL)](#grabación-y-extracción-de-episodios-il)
 - [Visualización GUI](#visualización-gui)
 - [Ejemplos](#ejemplos)
-- [Entrenamiento con Stable-Baselines3](#entrenamiento-con-stable-baselines3)
+- [Agentes PPO: Baseline vs CNN+LSTM](#agentes-ppo-baseline-vs-cnnlstm)
+  - [PPO Baseline (MLP)](#1-ppo-baseline-mlp)
+  - [PPO CNN+LSTM (Recurrente)](#2-ppo-cnnlstm-recurrente)
+  - [Comparación directa](#comparación-directa)
 - [Testing](#testing)
 - [Compatibilidad con Google Colab](#compatibilidad-con-google-colab)
 - [Licencia](#licencia)
@@ -233,6 +236,11 @@ cr-engine/
 │   │   └── validators.py        # Validación de acciones, pocket placement
 │   └── visualization/
 │       └── renderer.py          # Visualización GUI con Pygame
+│   models/
+│   ├── __init__.py
+│   ├── cnn_lstm_policy.py       # CNN + LSTM actor-critic (CnnLstmPolicy)
+│   ├── recurrent_rollout_buffer.py  # Buffer con (h,c) y secuencias
+│   └── recurrent_ppo.py        # Trainer PPO recurrente (mismo algoritmo)
 ├── examples/
 │   ├── 01_headless_quickstart.py   # Partida headless bot vs bot
 │   ├── 02_gymnasium_random_agent.py # Gymnasium con agente aleatorio
@@ -240,9 +248,12 @@ cr-engine/
 │   ├── 04_manual_placement.py      # Colocación manual de cartas
 │   ├── 05_pocket_placement.py      # Demo pocket placement (carriles/torres)
 │   ├── 06_state_inspection.py      # Inspección de estado y fog-of-war
-│   └── demo_gui.py                 # Demo de visualización GUI con Pygame
+│   ├── demo_gui.py                 # Demo de visualización GUI con Pygame
+│   ├── train_ppo_baseline.py       # Entrenamiento PPO MLP (SB3)
+│   └── train_ppo_cnn_lstm.py       # Entrenamiento PPO CNN+LSTM (custom)
 ├── tests/
-│   └── test_engine.py           # 69 tests (motor, física, combate, gym, IL, fog, pocket)
+│   ├── test_engine.py           # 69 tests (motor, física, combate, gym, IL, fog, pocket)
+│   └── test_cnn_lstm.py         # 20 tests (shapes, hidden reset, buffer, GAE)
 ├── environment.yaml             # Entorno Mamba con PyTorch + CUDA
 ├── pyproject.toml               # Configuración del paquete y herramientas
 └── AGENTS.md                    # Especificación completa del motor
@@ -487,7 +498,229 @@ python examples/demo_gui.py  # requiere pygame
 
 ---
 
-## Entrenamiento con Stable-Baselines3
+## Agentes PPO: Baseline vs CNN+LSTM
+
+El proyecto incluye **dos variantes de PPO** que comparten exactamente el mismo entorno, la misma observación, las mismas seeds y los mismos hiperparámetros del algoritmo. La única diferencia es la **arquitectura de la red neuronal** y el manejo de la memoria temporal.
+
+### Observación compartida
+
+Ambos agentes reciben el mismo vector de observación de **1 196 dimensiones** (normalizado a `[0, 1]`):
+
+| Rango | Dim | Contenido |
+|---|---|---|
+| `[0, 2)` | 2 | Elixir propio y enemigo (÷ 10) |
+| `[2, 8)` | 6 | HP de las 6 torres (÷ HP máximo) |
+| `[8, 44)` | 36 | Mano de 4 cartas: cada una = 8-dim one-hot + coste (÷ 10) |
+| `[44, 620)` | 576 | Grid **aliado** 32×18 (presencia binaria por celda) |
+| `[620, 1196)` | 576 | Grid **enemigo** 32×18 (presencia binaria por celda) |
+
+> Con fog-of-war activado (por defecto), el elixir enemigo se reporta como 0.
+
+### Espacio de acción
+
+`Discrete(2305)` — 18 × 32 × 4 = 2 304 combinaciones de colocación `(tile_x, tile_y, card_idx)` + 1 acción "no hacer nada" (no-op).
+
+---
+
+### 1. PPO Baseline (MLP)
+
+**Archivo:** `examples/train_ppo_baseline.py`
+
+Usa [Stable-Baselines3](https://stable-baselines3.readthedocs.io/) con la política `MlpPolicy` estándar.
+
+#### Arquitectura
+
+```
+obs (1196) ─→ Linear(1196, 64) ─→ ReLU
+             ─→ Linear(64, 64)   ─→ ReLU  ─→ π(a|s)  [Linear(64, 2305)]
+                                           ─→ V(s)    [Linear(64, 1)]
+```
+
+- **2 capas ocultas** de 64 unidades (MLP por defecto de SB3).
+- Redes de policy y value **comparten** las capas ocultas.
+- Sin memoria: cada step es una decisión independiente (Markoviano).
+
+#### Algoritmo PPO
+
+| Parámetro | Valor por defecto |
+|---|---|
+| `learning_rate` | 3 × 10⁻⁴ |
+| `n_steps` | 2 048 (por env) |
+| `batch_size` | 64 |
+| `n_epochs` | 10 |
+| `gamma` | 0.99 |
+| `gae_lambda` | 0.95 |
+| `clip_range` | 0.2 |
+| `ent_coef` | 0.01 |
+| `vf_coef` | 0.5 |
+| `max_grad_norm` | 0.5 |
+| `n_envs` | 4 (DummyVecEnv) |
+
+#### Ejecución
+
+```bash
+# Entrenamiento rápido (50k steps, ~10 min)
+python examples/train_ppo_baseline.py
+
+# Entrenamiento largo
+python examples/train_ppo_baseline.py --timesteps 500000
+
+# Sin fog-of-war (observación perfecta)
+python examples/train_ppo_baseline.py --no-fog
+```
+
+Logs en `runs/ppo_baseline_<timestamp>/`.
+
+---
+
+### 2. PPO CNN+LSTM (Recurrente)
+
+**Archivos:**
+- `clash_royale_engine/models/cnn_lstm_policy.py` — Arquitectura
+- `clash_royale_engine/models/recurrent_rollout_buffer.py` — Buffer recurrente
+- `clash_royale_engine/models/recurrent_ppo.py` — Trainer PPO recurrente
+- `examples/train_ppo_cnn_lstm.py` — Script de entrenamiento
+
+#### Motivación
+
+Clash Royale es un juego con **observabilidad parcial** (fog-of-war, elixir enemigo oculto) y **dependencias temporales** (el agente debe recordar dónde colocó tropas, rastrear el ciclo de cartas del oponente, etc.). Una LSTM permite al agente mantener un **estado interno** que resume la historia de observaciones pasadas.
+
+#### Arquitectura
+
+```
+obs (1196) ──┬── scalars (44) ─→ MLP(44→64→64) ──────────────────→ 64-d
+             │
+             └── grid (1152)  ─→ reshape (2, 32, 18)
+                               ─→ Conv2d(2→32, 3×3, s=1, pad=1) ─→ ReLU
+                               ─→ Conv2d(32→64, 3×3, s=2, pad=1) ─→ ReLU
+                               ─→ Conv2d(64→64, 3×3, s=2, pad=1) ─→ ReLU
+                               ─→ Flatten ─→ Linear(→128) ───────→ 128-d
+
+                          concat(128 + 64) = 192-d
+                                     │
+                                     ▼
+                         LSTM(192→128, 1 capa)
+                                     │
+                              ┌──────┴──────┐
+                              ▼              ▼
+                       π(a|s,h)           V(s,h)
+                     Linear(128→2305)   Linear(128→1)
+```
+
+**Componentes:**
+
+| Módulo | Entrada | Salida | Descripción |
+|---|---|---|---|
+| `ScalarEncoder` | `(B, 44)` | `(B, 64)` | MLP de 2 capas para elixir, HP torres, mano |
+| `CnnEncoder` | `(B, 2, 32, 18)` | `(B, 128)` | 3 capas Conv2d con stride progresivo |
+| `LSTM` | `(T, B, 192)` | `(T, B, 128)` | 1 capa, hidden=128 |
+| `policy_head` | `(T, B, 128)` | `(T, B, 2305)` | Logits de la distribución categórica |
+| `value_head` | `(T, B, 128)` | `(T, B, 1)` | Estimación de V(s) |
+
+#### Manejo del estado oculto (h, c)
+
+1. **Durante rollout:** se mantiene un `(h, c)` por cada env paralelo. Cuando un episodio termina (`done=True`), el hidden se **resetea a cero** para ese env.
+2. **Almacenamiento:** el buffer guarda `(h, c)` en cada step para poder reconstruir la secuencia durante entrenamiento.
+3. **Entrenamiento:** los minibatches son **secuencias contiguas** de longitud `seq_len` (16 por defecto). El forward pass usa `done_mask` para resetear el hidden en los límites de episodio dentro de cada secuencia.
+
+#### Rollout buffer recurrente
+
+A diferencia del `RolloutBuffer` estándar de SB3 (que muestrea transiciones individuales), el `RecurrentRolloutBuffer`:
+
+- Almacena datos en layout `(n_steps, n_envs, ...)`.
+- Guarda `hidden_h` y `hidden_c` en cada step.
+- GAE se calcula de forma **idéntica** al baseline (mismo `gamma`, `gae_lambda`).
+- El generador de minibatches parte el rollout en chunks de `seq_len` y los baraja entre envs.
+
+```
+Rollout (n_steps=2048, n_envs=4):
+├── Chunk 0: steps [0, 16)   env 0
+├── Chunk 1: steps [0, 16)   env 1
+├── Chunk 2: steps [0, 16)   env 2
+├── ...
+├── Chunk K: steps [2032, 2048) env 3
+└── → Shuffle → agrupar en minibatches
+```
+
+#### Algoritmo PPO (idéntico)
+
+Los hiperparámetros de PPO son **exactamente los mismos** que el baseline, sin ningún cambio en:
+
+- ✅ GAE (Generalized Advantage Estimation)
+- ✅ Clipped surrogate objective
+- ✅ Value function MSE loss (sin clipping de V)
+- ✅ Entropy bonus
+- ✅ Adam optimiser con gradient clipping
+- ✅ Normalización de ventajas por minibatch
+
+| Parámetro extra (CNN+LSTM) | Valor por defecto |
+|---|---|
+| `seq_len` | 16 |
+| `lstm_hidden` | 128 |
+| `lstm_layers` | 1 |
+
+#### Ejecución
+
+```bash
+# Entrenamiento rápido (50k steps)
+python examples/train_ppo_cnn_lstm.py
+
+# Entrenamiento largo con secuencia de 32
+python examples/train_ppo_cnn_lstm.py --timesteps 500000 --seq-len 32
+
+# LSTM más grande
+python examples/train_ppo_cnn_lstm.py --lstm-hidden 256
+```
+
+Logs en `runs/ppo_cnn_lstm_<timestamp>/`.
+
+---
+
+### Comparación directa
+
+Ambos scripts aceptan los **mismos flags CLI** para hiperparámetros PPO, por lo que se pueden comparar de forma justa:
+
+```bash
+# Entrenar ambos con misma configuración
+python examples/train_ppo_baseline.py  --timesteps 200000 --seed 42
+python examples/train_ppo_cnn_lstm.py  --timesteps 200000 --seed 42
+
+# Visualizar en TensorBoard
+tensorboard --logdir runs/
+```
+
+Métricas disponibles en TensorBoard:
+
+| Métrica | Baseline | CNN+LSTM |
+|---|---|---|
+| `rollout/ep_rew_mean` | ✅ | ✅ |
+| `rollout/ep_len_mean` | ✅ | ✅ |
+| `train/pg_loss` | ✅ | ✅ |
+| `train/vf_loss` | ✅ | ✅ |
+| `train/entropy` | ✅ | ✅ |
+| `game/win_rate` | ✅ | — (usar eval) |
+| `game/valid_action_pct` | ✅ | — (usar eval) |
+| `time/fps` | ✅ | ✅ |
+
+Ambos scripts escriben un `eval_summary.txt` al final con win rate, reward medio y longitud de episodio.
+
+#### Resumen de diferencias
+
+| Aspecto | PPO Baseline (MLP) | PPO CNN+LSTM |
+|---|---|---|
+| Framework | Stable-Baselines3 | Custom (PyTorch puro) |
+| Arquitectura | MLP 64→64 | CNN + MLP → LSTM(128) |
+| Memoria temporal | ❌ | ✅ (LSTM carry h,c) |
+| Observación | Flat vector (1196) | Misma, pero split en grid + scalars |
+| Info nueva | Ninguna | Ninguna (mismos features) |
+| Minibatch | Transiciones individuales | Secuencias de T=16 |
+| Buffer | SB3 RolloutBuffer | RecurrentRolloutBuffer |
+| Parámetros (aprox.) | ~160K | ~350K |
+| Ventaja esperada | Simple, rápido | Mejor en observabilidad parcial |
+
+---
+
+### Entrenamiento con Stable-Baselines3 (snippet rápido)
 
 ```python
 from stable_baselines3 import PPO
@@ -526,7 +759,7 @@ python -m pytest tests/ -v -k "not benchmark"
 python -m pytest tests/ --cov=clash_royale_engine --cov-report=term-missing
 ```
 
-Los **69 tests** cubren:
+Los **89 tests** cubren:
 - Inicialización y reset del motor
 - Generación, cap y gasto de elixir
 - Spawn de cartas (×1, ×2, ×3 según la carta)
@@ -545,6 +778,7 @@ Los **69 tests** cubren:
 - **Extracción de IL** (4 episodios por simetría, conversión a numpy)
 - **Pocket placement** (13 tests: restricción de lado, desbloqueo por torre, carriles, profundidad, hechizos libres, ambos jugadores)
 - Benchmark de rendimiento (~2800 ep/hora)
+- **CNN+LSTM policy** (20 tests: shapes de obs split, encoders, forward/act/evaluate, hidden reset on done, rollout buffer add/GAE/generator/reset)
 
 ---
 

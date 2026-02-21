@@ -423,55 +423,28 @@ class TestPocketPlacement:
     # ── Player 1 symmetric tests ──────────────────────────────────────────
 
     def test_p1_enemy_side_blocked(self) -> None:
-        """Player 1 cannot place troops on enemy side (high y from P1 perspective)."""
-        p1 = Player(
-            1,
-            [
-                "giant",
-                "musketeer",
-                "archers",
-                "mini_pekka",
-                "knight",
-                "skeletons",
-                "arrows",
-                "fireball",
-            ],
-            seed=0,
-        )
+        """Player 1 cannot place troops on enemy side (y >= BRIDGE_Y in
+        player-perspective coords) without tower kill — same rule as P0."""
+        p1 = Player(1, ["giant", "musketeer", "archers", "mini_pekka",
+                        "knight", "skeletons", "arrows", "fireball"], seed=0)
         p1.elixir = 10.0
-        # From P1's perspective, enemy side is tile_y >= BRIDGE_Y (15)
-        tile_y_enemy_side = int(BRIDGE_Y)  # 15 — enemy territory from P1's view
+        # In player-perspective coords the enemy side starts at BRIDGE_Y (15)
+        tile_y_enemy = int(BRIDGE_Y)  # 15 — enemy territory for any player
         err = validate_placement(
-            1,
-            5,
-            tile_y_enemy_side,
-            "knight",
-            p1,
+            1, 5, tile_y_enemy, "knight", p1,
             enemy_left_princess_dead=False,
             enemy_right_princess_dead=False,
         )
         assert err is not None
 
     def test_p1_left_pocket_unlocked(self) -> None:
-        """Player 1 can place in left pocket after enemy left tower dies."""
-        p1 = Player(
-            1,
-            [
-                "giant",
-                "musketeer",
-                "archers",
-                "mini_pekka",
-                "knight",
-                "skeletons",
-                "arrows",
-                "fireball",
-            ],
-            seed=0,
-        )
+        """Player 1 can place in left pocket (player-perspective y in pocket
+        range) after the enemy's left princess tower dies."""
+        p1 = Player(1, ["giant", "musketeer", "archers", "mini_pekka",
+                        "knight", "skeletons", "arrows", "fireball"], seed=0)
         p1.elixir = 10.0
-        # From P1's perspective, pocket is past the river:
-        #  y from RIVER_Y_MAX to RIVER_Y_MAX + POCKET_DEPTH - 1
-        pocket_y = int(RIVER_Y_MAX)  # 17 — just past river from P1's view
+        # Pocket range in player-perspective: [RIVER_Y_MAX, RIVER_Y_MAX + POCKET_DEPTH - 1]
+        pocket_y = int(RIVER_Y_MAX)  # 17 — first row of pocket past river
         pocket_x = 4  # left lane (< 9)
         err = validate_placement(
             1,
