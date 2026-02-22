@@ -31,12 +31,14 @@ from clash_royale_engine.core.state import State
 from clash_royale_engine.entities.base_entity import Entity, reset_entity_id_counter
 from clash_royale_engine.entities.troops.archers import create_archers
 from clash_royale_engine.entities.troops.giant import create_giant
+from clash_royale_engine.entities.troops.knight import create_knight
 from clash_royale_engine.entities.troops.skeletons import create_skeletons
 from clash_royale_engine.env.gymnasium_env import ClashRoyaleEnv
 from clash_royale_engine.env.multi_agent_env import VectorizedClashRoyaleEnv
 from clash_royale_engine.players.player import Player
 from clash_royale_engine.players.player_interface import RLAgentPlayer
 from clash_royale_engine.systems.elixir import ElixirSystem
+from clash_royale_engine.systems.combat import CombatSystem
 from clash_royale_engine.systems.physics import PhysicsEngine
 from clash_royale_engine.utils.constants import (
     BRIDGE_Y,
@@ -212,6 +214,29 @@ class TestCombatDamage:
         e.apply_damage(e.hp + 100)
         assert e.is_dead
         assert e.hp == 0
+
+    def test_melee_same_frame_is_simultaneous(self) -> None:
+        """Two melee units ready on the same frame should both deal damage."""
+        reset_entity_id_counter()
+        combat = CombatSystem(fps=DEFAULT_FPS)
+
+        k0 = create_knight(0, 5.0, 5.0)
+        k1 = create_knight(1, 5.7, 5.0)
+
+        # Force both to be deployed, in-range, and lethal in one hit.
+        k0.is_deployed = True
+        k1.is_deployed = True
+        k0.hp = 100
+        k1.hp = 100
+        k0.current_target = k1
+        k1.current_target = k0
+        k0.next_attack_frame = 0
+        k1.next_attack_frame = 0
+
+        combat.process_attacks([k0, k1], current_frame=0)
+
+        assert k0.is_dead
+        assert k1.is_dead
 
 
 class TestTowerDestruction:

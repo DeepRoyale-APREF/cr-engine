@@ -11,6 +11,8 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
+from clash_royale_engine.utils.constants import KING_TOWER_STATS, PRINCESS_TOWER_STATS
+
 if TYPE_CHECKING:
     from clash_royale_engine.core.state import State, UnitDetection
 
@@ -67,6 +69,9 @@ _MUSIC_TRACKS: Dict[str, Tuple[str, int]] = {
     "sudden_death": ("SuddenDeath.mp3",  -1),
     "countdown_ot": ("Countdown.mp3",     0),
 }
+
+_PRINCESS_TOWER_MAX_HP = float(PRINCESS_TOWER_STATS["hp"])
+_KING_TOWER_MAX_HP = float(KING_TOWER_STATS["hp"])
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -672,12 +677,12 @@ class Renderer:
         bar_w, bar_h = 46, 5
 
         tower_info: List[Tuple[float, float, float, float, Tuple[int, int, int]]] = [
-            (3.0, 3.0, state.numbers.left_princess_hp, 1400.0, COL_ALLY),
-            (14.0, 3.0, state.numbers.right_princess_hp, 1400.0, COL_ALLY),
-            (8.5, 0.5, state.numbers.king_hp, 2400.0, COL_ALLY),
-            (3.0, 28.0, state.numbers.left_enemy_princess_hp, 1400.0, COL_ENEMY),
-            (14.0, 28.0, state.numbers.right_enemy_princess_hp, 1400.0, COL_ENEMY),
-            (8.5, 31.0, state.numbers.enemy_king_hp, 2400.0, COL_ENEMY),
+            (3.0, 3.0, state.numbers.left_princess_hp, _PRINCESS_TOWER_MAX_HP, COL_ALLY),
+            (14.0, 3.0, state.numbers.right_princess_hp, _PRINCESS_TOWER_MAX_HP, COL_ALLY),
+            (8.5, 0.5, state.numbers.king_hp, _KING_TOWER_MAX_HP, COL_ALLY),
+            (3.0, 28.0, state.numbers.left_enemy_princess_hp, _PRINCESS_TOWER_MAX_HP, COL_ENEMY),
+            (14.0, 28.0, state.numbers.right_enemy_princess_hp, _PRINCESS_TOWER_MAX_HP, COL_ENEMY),
+            (8.5, 31.0, state.numbers.enemy_king_hp, _KING_TOWER_MAX_HP, COL_ENEMY),
         ]
 
         for tx, ty, hp, max_hp, col in tower_info:

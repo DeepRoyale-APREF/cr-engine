@@ -4,7 +4,7 @@ Combat system — attacks, projectiles, and damage application.
 
 from __future__ import annotations
 
-from typing import List
+from typing import Dict, List
 
 from clash_royale_engine.entities.base_entity import Entity, Projectile
 from clash_royale_engine.entities.buildings.king_tower import KingTowerEntity
@@ -22,7 +22,13 @@ class CombatSystem:
     # ── public API ────────────────────────────────────────────────────────
 
     def process_attacks(self, entities: List[Entity], current_frame: int) -> None:
-        """Check every entity and fire attacks when ready."""
+        """Check every entity and fire attacks when ready.
+
+        Melee hits are resolved simultaneously within the frame to avoid
+        deterministic first-mover bias from entity iteration order.
+        """
+        pending_melee: Dict[Entity, int] = {}
+
         for e in entities:
             if e.is_dead or not e.is_deployed or e.current_target is None:
                 continue
@@ -35,7 +41,12 @@ class CombatSystem:
 
             dist = e.distance_to(e.current_target)
             if dist <= e.attack_range + e.current_target.hitbox_radius:
-                self._execute_attack(e, current_frame)
+                self._queue_or_execute_attack(e, current_frame, pending_melee)
+
+        if pending_melee:
+            for target, total_damage in pending_melee.items():
+                if not target.is_dead:
+                    self._apply_damage(target, total_damage)
 
     def update_projectiles(self) -> None:
         """Move projectiles and apply damage on impact."""
@@ -54,7 +65,12 @@ class CombatSystem:
 
     # ── internal ──────────────────────────────────────────────────────────
 
-    def _execute_attack(self, attacker: Entity, current_frame: int) -> None:
+    def _queue_or_execute_attack(
+        self,
+        attacker: Entity,
+        current_frame: int,
+        pending_melee: Dict[Entity, int],
+    ) -> None:
         target = attacker.current_target
         assert target is not None
 
@@ -67,8 +83,8 @@ class CombatSystem:
             )
             self.active_projectiles.append(proj)
         else:
-            # Melee — instant damage
-            self._apply_damage(target, attacker.damage)
+            # Melee — queue so all ready attacks resolve simultaneously
+            pending_melee[target] = pending_melee.get(target, 0) + attacker.damage
 
         # Cooldown
         delay_frames = max(1, int(attacker.hit_speed * self.fps))
