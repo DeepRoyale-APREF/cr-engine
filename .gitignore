@@ -60,7 +60,7 @@ wandb/
 *.tfevents.*
 
 # ── Trained Models ────────────────────────────────────────────────────
-models/
+#models/
 *.pt
 *.pth
 *.onnx
