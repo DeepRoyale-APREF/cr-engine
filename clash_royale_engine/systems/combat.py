@@ -40,7 +40,7 @@ class CombatSystem:
                 continue
 
             dist = e.distance_to(e.current_target)
-            if dist <= e.attack_range + e.current_target.hitbox_radius:
+            if dist <= e.attack_range + e.hitbox_radius + e.current_target.hitbox_radius:
                 self._queue_or_execute_attack(e, current_frame, pending_melee)
 
         if pending_melee:

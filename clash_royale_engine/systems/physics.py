@@ -201,7 +201,7 @@ class PhysicsEngine:
             dist = float(np.hypot(goal_x - entity.x, goal_y - entity.y))
 
             # Already in attack range → stop (match combat's fire distance)
-            if dist <= entity.attack_range + target.hitbox_radius:
+            if dist <= entity.attack_range + entity.hitbox_radius + target.hitbox_radius:
                 return np.array([0.0, 0.0])
         else:
             # No target — advance toward enemy side

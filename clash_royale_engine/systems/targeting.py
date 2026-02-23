@@ -107,13 +107,14 @@ class TargetingSystem:
                     return entity.current_target
                 # Other troops: stay locked while in combat range
                 dist_cur = entity.distance_to(entity.current_target)
-                if dist_cur <= entity.attack_range + entity.current_target.hitbox_radius:
+                if dist_cur <= entity.attack_range + entity.hitbox_radius + entity.current_target.hitbox_radius:
                     return entity.current_target
                 # Walking phase — fall through to re-acquire, which picks
                 # the closest valid enemy (may be the same or a nearer one).
             else:
                 # Buildings / towers: retain while within firing range
-                if entity.distance_to(entity.current_target) <= entity.sight_range:
+                # sight_range is edge-to-edge, so add both hitbox radii
+                if entity.distance_to(entity.current_target) <= entity.sight_range + entity.hitbox_radius + entity.current_target.hitbox_radius:
                     return entity.current_target
 
         # ── Acquire a new target ──────────────────────────────────────
@@ -122,7 +123,8 @@ class TargetingSystem:
         for t in potential_targets:
             if t.is_dead or t.player_id == entity.player_id:
                 continue
-            if entity.distance_to(t) <= entity.sight_range:
+            # sight_range is edge-to-edge, so add both hitbox radii
+            if entity.distance_to(t) <= entity.sight_range + entity.hitbox_radius + t.hitbox_radius:
                 in_range.append(t)
 
         if not in_range:
